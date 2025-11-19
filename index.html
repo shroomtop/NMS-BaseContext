@@ -1,0 +1,1608 @@
+<!--LEGAL-DNA:{"jurisdiction":"US/MN/Baxter","export_tag":"EAR99","spdx":"MIT","artifact_time":1763589469013,"def_pub":"OIN","consent_req":true,"city":"Baxter"}-->
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <title>NMS BaseContext + Galactic Address 3D Tool</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- Tailwind CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Three.js -->
+  <script src="https://unpkg.com/three@0.148.0/build/three.min.js"></script>
+
+  <style>
+    :root {
+      color-scheme: dark;
+    }
+
+    html,
+    body {
+      height: 100%;
+    }
+
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: radial-gradient(circle at top, #020617, #020617 60%);
+      color: #e5e7eb;
+    }
+
+    .scroll-thin::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+
+    .scroll-thin::-webkit-scrollbar-thumb {
+      background: #475569;
+      border-radius: 9999px;
+    }
+
+    .scroll-thin::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    #jsonEditor {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+        "Liberation Mono", "Courier New", monospace;
+      tab-size: 2;
+      -moz-tab-size: 2;
+      white-space: pre;
+    }
+
+    #threeCanvas {
+      width: 100%;
+      height: 100%;
+      min-height: 260px;
+      display: block;
+      touch-action: none;
+    }
+
+    .tree-line:hover {
+      background-color: rgba(15, 23, 42, 0.9);
+    }
+
+    .tree-line.selected {
+      background-color: rgba(34, 197, 94, 0.15);
+    }
+
+    .tree-toggle {
+      width: 14px;
+      text-align: center;
+      font-size: 10px;
+      cursor: pointer;
+      color: #9ca3af;
+      user-select: none;
+    }
+
+    .tree-toggle.empty {
+      visibility: hidden;
+      cursor: default;
+    }
+
+    .tree-key {
+      color: #e5e7eb;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+      overflow: hidden;
+      max-width: 160px;
+    }
+
+    .tree-meta {
+      font-size: 10px;
+      color: #9ca3af;
+      white-space: nowrap;
+    }
+  </style>
+
+  <!-- Minimal OrbitControls (inline, pointer + touch) -->
+  <script>
+    (function() {
+      THREE.OrbitControls = function(object, domElement) {
+        const scope = this;
+        this.object = object;
+        this.domElement = domElement || document;
+        this.enabled = true;
+        this.target = new THREE.Vector3();
+        this.minDistance = 0;
+        this.maxDistance = Infinity;
+        this.enableDamping = true;
+        this.dampingFactor = 0.08;
+        this.enableZoom = true;
+        this.zoomSpeed = 1.0;
+        this.enableRotate = true;
+        this.rotateSpeed = 1.0;
+        this.enablePan = true;
+        this.panSpeed = 1.0;
+        const STATE = {
+          NONE: -1,
+          ROTATE: 0,
+          DOLLY: 1,
+          PAN: 2
+        };
+        let state = STATE.NONE;
+        const spherical = new THREE.Spherical();
+        const sphericalDelta = new THREE.Spherical();
+        let scale = 1;
+        const panOffset = new THREE.Vector3();
+        let zoomChanged = false;
+        const rotateStart = new THREE.Vector2();
+        const rotateEnd = new THREE.Vector2();
+        const rotateDelta = new THREE.Vector2();
+        const panStart = new THREE.Vector2();
+        const panEnd = new THREE.Vector2();
+        const panDelta = new THREE.Vector2();
+        const dollyStart = new THREE.Vector2();
+        const dollyEnd = new THREE.Vector2();
+        const dollyDelta = new THREE.Vector2();
+
+        function getAutoDistance() {
+          const offset = new THREE.Vector3();
+          offset.copy(scope.object.position).sub(scope.target);
+          return offset.length();
+        }
+        this.update = function() {
+          const offset = new THREE.Vector3();
+          offset.copy(scope.object.position).sub(scope.target);
+          spherical.setFromVector3(offset);
+          spherical.theta += sphericalDelta.theta;
+          spherical.phi += sphericalDelta.phi;
+          const EPS = 1e-6;
+          const minPhi = EPS;
+          const maxPhi = Math.PI - EPS;
+          spherical.phi = Math.max(minPhi, Math.min(maxPhi, spherical.phi));
+          spherical.radius *= scale;
+          spherical.radius = Math.max(scope.minDistance, Math.min(scope.maxDistance, spherical.radius));
+          scope.target.add(panOffset);
+          offset.setFromSpherical(spherical);
+          scope.object.position.copy(scope.target).add(offset);
+          scope.object.lookAt(scope.target);
+          sphericalDelta.set(0, 0, 0);
+          scale = 1;
+          panOffset.set(0, 0, 0);
+          if (scope.enableDamping) {
+            rotateDelta.multiplyScalar(1 - scope.dampingFactor);
+            panDelta.multiplyScalar(1 - scope.dampingFactor);
+          } else {
+            rotateDelta.set(0, 0);
+            panDelta.set(0, 0);
+          }
+          return zoomChanged;
+        };
+
+        function handleMouseDownRotate(event) {
+          rotateStart.set(event.clientX, event.clientY);
+        }
+
+        function handleMouseDownPan(event) {
+          panStart.set(event.clientX, event.clientY);
+        }
+
+        function handleMouseDownDolly(event) {
+          dollyStart.set(event.clientX, event.clientY);
+        }
+
+        function handleMouseMoveRotate(event) {
+          rotateEnd.set(event.clientX, event.clientY);
+          rotateDelta.subVectors(rotateEnd, rotateStart).multiplyScalar(scope.rotateSpeed / 200);
+          sphericalDelta.theta -= 2 * Math.PI * rotateDelta.x;
+          sphericalDelta.phi -= 2 * Math.PI * rotateDelta.y;
+          rotateStart.copy(rotateEnd);
+        }
+
+        function handleMouseMovePan(event) {
+          panEnd.set(event.clientX, event.clientY);
+          panDelta.subVectors(panEnd, panStart).multiplyScalar(scope.panSpeed / 100);
+          const distance = getAutoDistance();
+          panOffset.x -= 2 * panDelta.x * distance / window.innerHeight;
+          panOffset.y += 2 * panDelta.y * distance / window.innerHeight;
+          panStart.copy(panEnd);
+        }
+
+        function handleMouseMoveDolly(event) {
+          dollyEnd.set(event.clientX, event.clientY);
+          dollyDelta.subVectors(dollyEnd, dollyStart);
+          if (dollyDelta.y > 0) scale *= 1.05;
+          else if (dollyDelta.y < 0) scale /= 1.05;
+          dollyStart.copy(dollyEnd);
+          zoomChanged = true;
+        }
+
+        function onMouseDown(event) {
+          if (!scope.enabled) return;
+          event.preventDefault();
+          switch (event.button) {
+            case 0:
+              state = STATE.ROTATE;
+              handleMouseDownRotate(event);
+              break;
+            case 1:
+              state = STATE.DOLLY;
+              handleMouseDownDolly(event);
+              break;
+            case 2:
+              state = STATE.PAN;
+              handleMouseDownPan(event);
+              break;
+          }
+          scope.domElement.addEventListener('mousemove', onMouseMove, false);
+          scope.domElement.addEventListener('mouseup', onMouseUp, false);
+        }
+
+        function onMouseMove(event) {
+          if (!scope.enabled) return;
+          event.preventDefault();
+          switch (state) {
+            case STATE.ROTATE:
+              handleMouseMoveRotate(event);
+              break;
+            case STATE.DOLLY:
+              handleMouseMoveDolly(event);
+              break;
+            case STATE.PAN:
+              handleMouseMovePan(event);
+              break;
+          }
+        }
+
+        function onMouseUp() {
+          scope.domElement.removeEventListener('mousemove', onMouseMove, false);
+          scope.domElement.removeEventListener('mouseup', onMouseUp, false);
+          state = STATE.NONE;
+        }
+
+        function onMouseWheel(event) {
+          if (!scope.enabled || !scope.enableZoom) return;
+          event.preventDefault();
+          if (event.deltaY < 0) scale /= 1.08;
+          else scale *= 1.08;
+          zoomChanged = true;
+        }
+
+        function getTouchDistance(event) {
+          const dx = event.touches[0].pageX - event.touches[1].pageX;
+          const dy = event.touches[0].pageY - event.touches[1].pageY;
+          return Math.sqrt(dx * dx + dy * dy);
+        }
+        let lastTouchDistance = null;
+
+        function onTouchStart(event) {
+          if (!scope.enabled) return;
+          const touches = event.touches;
+          if (touches.length === 1) {
+            state = STATE.ROTATE;
+            rotateStart.set(touches[0].pageX, touches[0].pageY);
+          } else if (touches.length === 2) {
+            state = STATE.PAN;
+            const cx = (touches[0].pageX + touches[1].pageX) / 2;
+            const cy = (touches[0].pageY + touches[1].pageY) / 2;
+            panStart.set(cx, cy);
+            lastTouchDistance = getTouchDistance(event);
+          }
+        }
+
+        function onTouchMove(event) {
+          if (!scope.enabled) return;
+          const touches = event.touches;
+          if (state === STATE.ROTATE && touches.length === 1) {
+            rotateEnd.set(touches[0].pageX, touches[0].pageY);
+            rotateDelta.subVectors(rotateEnd, rotateStart).multiplyScalar(scope.rotateSpeed / 200);
+            sphericalDelta.theta -= 2 * Math.PI * rotateDelta.x;
+            sphericalDelta.phi -= 2 * Math.PI * rotateDelta.y;
+            rotateStart.copy(rotateEnd);
+          } else if (state === STATE.PAN && touches.length === 2) {
+            const cx = (touches[0].pageX + touches[1].pageX) / 2;
+            const cy = (touches[0].pageY + touches[1].pageY) / 2;
+            panEnd.set(cx, cy);
+            panDelta.subVectors(panEnd, panStart).multiplyScalar(scope.panSpeed / 100);
+            const dist = getAutoDistance();
+            panOffset.x -= 2 * panDelta.x * dist / window.innerHeight;
+            panOffset.y += 2 * panDelta.y * dist / window.innerHeight;
+            panStart.copy(panEnd);
+            const newDist = getTouchDistance(event);
+            if (lastTouchDistance !== null) {
+              if (newDist > lastTouchDistance) scale /= 1.03;
+              else if (newDist < lastTouchDistance) scale *= 1.03;
+              zoomChanged = true;
+            }
+            lastTouchDistance = newDist;
+          }
+        }
+
+        function onTouchEnd() {
+          state = STATE.NONE;
+          lastTouchDistance = null;
+        }
+        this.domElement.addEventListener('mousedown', onMouseDown, false);
+        this.domElement.addEventListener('wheel', onMouseWheel, {
+          passive: false
+        });
+        this.domElement.addEventListener('touchstart', onTouchStart, {
+          passive: false
+        });
+        this.domElement.addEventListener('touchmove', onTouchMove, {
+          passive: false
+        });
+        this.domElement.addEventListener('touchend', onTouchEnd, false);
+      };
+    })();
+  </script>
+</head>
+
+<body class="min-h-screen flex flex-col text-slate-100">
+  <!-- Header -->
+  <header class="border-b border-slate-800 bg-slate-950/90 backdrop-blur">
+    <div class="max-w-6xl mx-auto px-3 sm:px-4 py-2.5 flex flex-wrap items-center justify-between gap-2">
+      <div>
+        <h1 class="text-base sm:text-lg font-semibold tracking-tight">
+          NMS BaseContext + Galactic Address 3D Tool
+        </h1>
+        <p class="text-[11px] text-slate-400">
+          Load <code>BaseContext.json</code> / base JSON → edit, visualize Objects, and plot <code>GalacticAddress</code> voxels.
+        </p>
+      </div>
+      <div class="flex flex-col items-end text-[11px] gap-0.5">
+        <span id="statusBadge" class="px-2 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-slate-300">
+          ready
+        </span>
+        <span id="statusText" class="text-slate-400">
+          Idle. Load a JSON file to begin.
+        </span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main layout -->
+  <main class="flex-1">
+    <div class="max-w-6xl mx-auto px-3 sm:px-4 py-3 sm:py-4 grid grid-cols-1 lg:grid-cols-2 gap-3 lg:gap-4">
+
+      <!-- LEFT: Loader + Tree + JSON -->
+      <section class="bg-slate-950/80 border border-slate-800 rounded-2xl shadow-xl shadow-black/60 flex flex-col overflow-hidden">
+        <!-- Loader -->
+        <div class="px-3 sm:px-4 py-2.5 border-b border-slate-800/80">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h2 class="text-sm font-semibold tracking-tight">1. Load &amp; Manage JSON</h2>
+              <p class="text-[11px] text-slate-400">
+                Drop your real <code>BaseContext.json</code> or any NMS base JSON.
+              </p>
+            </div>
+            <div class="text-[11px] text-slate-400" id="fileInfo">File: none</div>
+          </div>
+
+          <div class="mt-2 flex flex-wrap gap-2 text-xs items-center">
+            <label class="cursor-pointer inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-800/70 hover:bg-slate-700/80">
+              <span>Load .json</span>
+              <input id="fileInput" type="file" accept=".json,application/json" class="hidden" />
+            </label>
+
+            <button id="btnPaste" class="px-2.5 py-1 rounded-full bg-slate-800/70 hover:bg-slate-700/80">
+              Paste from clipboard
+            </button>
+
+            <button id="btnFormat" class="px-2.5 py-1 rounded-full bg-emerald-600 hover:bg-emerald-500 font-medium">
+              Validate &amp; pretty-print
+            </button>
+
+            <button id="btnExport" class="px-2.5 py-1 rounded-full bg-slate-800/70 hover:bg-slate-700/80">
+              Download JSON
+            </button>
+
+            <button id="btnCopyJson" class="px-2.5 py-1 rounded-full bg-slate-800/70 hover:bg-slate-700/80">
+              Copy JSON
+            </button>
+
+            <label class="inline-flex items-center gap-1 ml-auto text-[11px] text-slate-400">
+              <input id="optSanitize" type="checkbox" class="rounded bg-slate-900 border border-slate-700" checked />
+              <span>Auto-fix <code>\xHH</code> hex</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Tabs: Tree / Raw JSON -->
+        <div class="border-b border-slate-800/80 px-3 sm:px-4 pt-2">
+          <div class="flex items-center gap-2 text-xs">
+            <button id="tabTree" class="px-3 py-1 rounded-full bg-slate-800 text-slate-100 border border-slate-700">
+              Tree
+            </button>
+            <button id="tabJson" class="px-3 py-1 rounded-full bg-transparent text-slate-300 border border-transparent hover:border-slate-700">
+              Raw JSON
+            </button>
+            <div class="ml-auto flex items-center gap-2 text-[11px]" id="treeControls">
+              <input id="treeFilter" type="text" placeholder="filter keys…" class="px-2 py-0.5 rounded bg-slate-900 border border-slate-700 text-[11px] w-28" />
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab content -->
+        <div class="flex-1 min-h-[260px] max-h-[60vh] flex flex-col overflow-hidden">
+          <!-- Tree view -->
+          <div id="treePanel" class="flex-1 overflow-y-auto scroll-thin px-3 sm:px-4 py-2 text-[11px]">
+            <div id="treeRoot" class="border border-slate-800 rounded-xl bg-slate-950/80 px-1.5 py-1 max-h-full overflow-auto scroll-thin">
+              <div class="px-2 py-1 text-slate-500">
+                Load a JSON file to see the tree.
+              </div>
+            </div>
+          </div>
+
+          <!-- Raw JSON view -->
+          <div id="jsonPanel" class="flex-1 overflow-hidden hidden">
+            <textarea id="jsonEditor" class="w-full h-full min-h-[260px] max-h-[60vh] p-3 sm:p-4 text-xs leading-5 bg-transparent text-slate-100 outline-none border-0 resize-none scroll-thin" spellcheck="false" placeholder='Paste BaseContext.json or any base JSON here, or load from file above.'></textarea>
+          </div>
+
+          <!-- Tree selection editor footer -->
+          <div class="border-t border-slate-800/80 px-3 sm:px-4 py-2 text-[11px] flex items-center justify-between gap-2">
+            <div class="flex-1 flex flex-wrap items-center gap-2">
+              <span class="text-slate-400">Selected path:</span>
+              <input id="selectedPath" type="text" class="flex-1 min-w-[80px] px-2 py-0.5 rounded bg-slate-900 border border-slate-700 text-[11px]" readonly />
+            </div>
+            <div class="flex items-center gap-2">
+              <button id="btnLoadNode" class="px-2.5 py-1 rounded-full bg-slate-800/80 hover:bg-slate-700/90">
+                Load subtree → editor
+              </button>
+              <button id="btnApplyNode" class="px-2.5 py-1 rounded-full bg-emerald-600 hover:bg-emerald-500">
+                Apply editor → subtree
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- RIGHT: 3D + Galactic Address plotter -->
+      <section class="bg-slate-950/80 border border-slate-800 rounded-2xl shadow-xl shadow-black/60 flex flex-col overflow-hidden">
+        <!-- Top bar -->
+        <div class="px-3 sm:px-4 py-2.5 border-b border-slate-800/80 flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 class="text-sm font-semibold tracking-tight">2. 3D Views</h2>
+            <p class="text-[11px] text-slate-400">
+              Toggle between <span class="text-emerald-400">Base Objects</span> (Objects[].Position) and
+              <span class="text-sky-400">Galactic Addresses</span> (VoxelX/Y/Z).
+            </p>
+          </div>
+          <div class="flex flex-wrap gap-2 text-[11px]">
+            <button id="btnModeObjects" class="px-2.5 py-1 rounded-full bg-emerald-600 hover:bg-emerald-500">
+              Base Objects
+            </button>
+            <button id="btnModeGalaxy" class="px-2.5 py-1 rounded-full bg-slate-800/80 hover:bg-slate-700/90">
+              Galactic Map
+            </button>
+          </div>
+        </div>
+
+        <!-- 3D canvas -->
+        <div class="flex-1 relative">
+          <canvas id="threeCanvas"></canvas>
+          <div class="absolute bottom-2 left-2 px-2 py-1 rounded bg-slate-900/85 text-[10px] text-slate-200 border border-slate-700">
+            Axes: X(red) Y(green) Z(blue) · grid at Y=0 · yellow cube at origin.
+          </div>
+        </div>
+
+        <!-- Inspector / Galactic list -->
+        <div class="border-t border-slate-800/80 px-3 sm:px-4 py-2.5 text-[11px] space-y-2">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <div class="space-y-0.5">
+              <div id="selectionLabel" class="text-slate-300">
+                No object selected. Tap a point to select (Base mode) or click an address in the list.
+              </div>
+              <div id="statsLine" class="text-slate-500">
+                Objects: 0 · Galactic addresses: 0
+              </div>
+            </div>
+            <div class="flex flex-wrap gap-1.5">
+              <button id="btnFrameAll" class="px-2.5 py-1 rounded-full bg-slate-800/80 hover:bg-slate-700/90">
+                Frame All
+              </button>
+              <button id="btnResetCamera" class="px-2.5 py-1 rounded-full bg-slate-800/80 hover:bg-slate-700/90">
+                Reset Camera
+              </button>
+            </div>
+          </div>
+
+          <!-- Movement controls (Base Objects mode) -->
+          <div id="moveControls" class="space-y-2">
+            <div class="flex flex-wrap items-center gap-2">
+              <label class="flex items-center gap-1 text-slate-400">
+                Step
+                <input id="moveStep" type="number" value="1" step="0.1" class="w-16 px-2 py-1 rounded bg-slate-900 border border-slate-700 text-[11px]" />
+              </label>
+              <div class="flex flex-wrap items-center gap-1">
+                <span class="text-slate-400 mr-1">X</span>
+                <button id="btnXminus" class="px-2 py-0.5 rounded bg-slate-800/80 hover:bg-slate-700/90">-</button>
+                <button id="btnXplus" class="px-2 py-0.5 rounded bg-slate-800/80 hover:bg-slate-700/90">+</button>
+
+                <span class="text-slate-400 ml-2 mr-1">Y</span>
+                <button id="btnYminus" class="px-2 py-0.5 rounded bg-slate-800/80 hover:bg-slate-700/90">-</button>
+                <button id="btnYplus" class="px-2 py-0.5 rounded bg-slate-800/80 hover:bg-slate-700/90">+</button>
+
+                <span class="text-slate-400 ml-2 mr-1">Z</span>
+                <button id="btnZminus" class="px-2 py-0.5 rounded bg-slate-800/80 hover:bg-slate-700/90">-</button>
+                <button id="btnZplus" class="px-2 py-0.5 rounded bg-slate-800/80 hover:bg-slate-700/90">+</button>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-3 gap-2">
+              <label class="flex flex-col gap-0.5">
+                <span class="text-slate-400">X</span>
+                <input id="posX" type="number" step="0.1" class="w-full px-2 py-1 rounded bg-slate-900 border border-slate-700 text-[11px]" />
+              </label>
+              <label class="flex flex-col gap-0.5">
+                <span class="text-slate-400">Y</span>
+                <input id="posY" type="number" step="0.1" class="w-full px-2 py-1 rounded bg-slate-900 border border-slate-700 text-[11px]" />
+              </label>
+              <label class="flex flex-col gap-0.5">
+                <span class="text-slate-400">Z</span>
+                <input id="posZ" type="number" step="0.1" class="w-full px-2 py-1 rounded bg-slate-900 border border-slate-700 text-[11px]" />
+              </label>
+            </div>
+
+            <div class="flex flex-wrap gap-2">
+              <button id="btnApplyPos" class="px-3 py-1 rounded-full bg-emerald-600 hover:bg-emerald-500">
+                Apply XYZ to selected object
+              </button>
+              <button id="btnSyncJson" class="px-3 py-1 rounded-full bg-slate-800/80 hover:bg-slate-700/90">
+                Re-pretty-print JSON from edits
+              </button>
+            </div>
+          </div>
+
+          <!-- Galactic address list -->
+          <div class="border-t border-slate-800/80 pt-2 mt-1">
+            <div class="flex items-center justify-between mb-1">
+              <span class="text-slate-300">GalacticAddress entries</span>
+              <button id="btnScanAddresses" class="px-2.5 py-1 rounded-full bg-sky-600 hover:bg-sky-500 text-[11px]">
+                Scan &amp; Plot
+              </button>
+            </div>
+            <div id="addressList" class="max-h-32 overflow-y-auto scroll-thin text-[11px] border border-slate-800 rounded-lg bg-slate-950/90">
+              <div class="px-2 py-1 text-slate-500">
+                Click “Scan &amp; Plot” to detect VoxelX/Y/Z in the loaded JSON.
+              </div>
+            </div>
+          </div>
+
+          <div class="text-[10px] text-slate-500">
+            Tree editor style inspired by GoatFungus NMSSE. 3D and galactic mapping wired for your save experiments.
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const statusText = $("statusText");
+    const statusBadge = $("statusBadge");
+    const fileInfo = $("fileInfo");
+    const optSanitize = $("optSanitize");
+
+    function setStatus(msg, type = "info") {
+      statusText.textContent = msg;
+      statusBadge.className =
+        "px-2 py-0.5 rounded-full border text-[11px]";
+      if (type === "ok") {
+        statusBadge.textContent = "ok";
+        statusBadge.classList.add(
+          "bg-emerald-900/40", "text-emerald-300", "border-emerald-700/80"
+        );
+      } else if (type === "error") {
+        statusBadge.textContent = "error";
+        statusBadge.classList.add(
+          "bg-rose-900/40", "text-rose-300", "border-rose-700/80"
+        );
+      } else {
+        statusBadge.textContent = "info";
+        statusBadge.classList.add(
+          "bg-slate-800", "text-slate-300", "border-slate-700"
+        );
+      }
+    }
+    async function copyToClipboard(text) {
+      if (!navigator.clipboard) throw new Error("Clipboard API not available.");
+      await navigator.clipboard.writeText(text);
+    }
+
+    function downloadBlob(content, filename, mime = "application/json") {
+      const blob = new Blob([content], {
+        type: mime
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+    // === NMS hex helpers (key fix) ===
+    function sanitizeNms(text) {
+      // \xHH -> \u00HH so JSON.parse accepts it
+      return text.replace(/\\x([0-9A-Fa-f]{2})/g, "\\u00$1");
+    }
+
+    function unsanitizeNms(text) {
+      // restore \u00HH -> \xHH for NMS to like it
+      return text.replace(/\\u00([0-9A-Fa-f]{2})/g, "\\x$1");
+    }
+    // === Global JSON state ===
+    let rootJson = null;
+    let rootRaw = "";
+    let rootFileName = null;
+    let baseObjects = null;
+    let baseBounds = null;
+    let galacticAddresses = [];
+    // === Tree utilities ===
+    const treeRootEl = $("treeRoot");
+    const treeFilterEl = $("treeFilter");
+    const selectedPathEl = $("selectedPath");
+
+    function parsePath(path) {
+      const tokens = [];
+      if (!path) return tokens;
+      path.split(".").forEach(part => {
+        if (!part) return;
+        const re = /([^\[\]]+)|\[(\d+)\]/g;
+        let m;
+        while ((m = re.exec(part))) {
+          if (m[1]) tokens.push(m[1]);
+          else if (m[2]) tokens.push(Number(m[2]));
+        }
+      });
+      return tokens;
+    }
+
+    function getByPath(obj, path) {
+      const tokens = typeof path === "string" ? parsePath(path) : path;
+      let cur = obj;
+      for (const t of tokens) {
+        if (cur == null) return undefined;
+        cur = cur[t];
+      }
+      return cur;
+    }
+
+    function setByPath(obj, path, value) {
+      const tokens = typeof path === "string" ? parsePath(path) : path;
+      if (!tokens.length) return false;
+      let cur = obj;
+      for (let i = 0; i < tokens.length - 1; i++) {
+        const t = tokens[i];
+        if (cur[t] == null) {
+          cur[t] = typeof tokens[i + 1] === "number" ? [] : {};
+        }
+        cur = cur[t];
+      }
+      cur[tokens[tokens.length - 1]] = value;
+      return true;
+    }
+
+    function makeChildPath(parentPath, key, isIndex) {
+      if (!parentPath) {
+        return isIndex ? "[" + key + "]" : String(key);
+      }
+      if (isIndex) return parentPath + "[" + key + "]";
+      return parentPath + "." + key;
+    }
+
+    function typeLabel(val) {
+      if (Array.isArray(val)) return "array(" + val.length + ")";
+      if (val === null) return "null";
+      const t = typeof val;
+      if (t === "object") return "object";
+      return t;
+    }
+
+    function hasChildren(val) {
+      if (Array.isArray(val)) return val.length > 0;
+      if (val && typeof val === "object") return Object.keys(val).length > 0;
+      return false;
+    }
+
+    function clearTree() {
+      treeRootEl.innerHTML =
+        '<div class="px-2 py-1 text-slate-500">No JSON loaded.</div>';
+    }
+
+    function buildChildren(parentPath, containerEl) {
+      containerEl.innerHTML = "";
+      const val = parentPath ? getByPath(rootJson, parentPath) : rootJson;
+      if (val == null) return;
+      const isObj = (val && typeof val === "object" && !Array.isArray(val));
+      const isArr = Array.isArray(val);
+      let keys;
+      if (isObj) keys = Object.keys(val);
+      else if (isArr) keys = val.map((_, i) => i);
+      else return;
+      const frag = document.createDocumentFragment();
+      const filterText = (treeFilterEl.value || "").trim().toLowerCase();
+      keys.forEach(k => {
+        const childVal = val[k];
+        const isIndex = isArr;
+        const path = makeChildPath(parentPath, k, isIndex);
+        const tLabel = typeLabel(childVal);
+        const childHasChildren = hasChildren(childVal);
+        if (filterText) {
+          const keyStr = String(k).toLowerCase();
+          if (!keyStr.includes(filterText)) {
+            // simple key filter; still render for now
+          }
+        }
+        const node = document.createElement("div");
+        node.className = "tree-node";
+        node.dataset.path = path;
+        const line = document.createElement("div");
+        line.className = "tree-line flex items-center px-2 py-0.5 gap-1 cursor-pointer";
+        node.appendChild(line);
+        const toggle = document.createElement("span");
+        toggle.className = "tree-toggle" + (childHasChildren ? "" : " empty");
+        toggle.textContent = childHasChildren ? "▸" : "";
+        line.appendChild(toggle);
+        const label = document.createElement("span");
+        label.className = "flex items-baseline gap-2 flex-1 min-w-0";
+        const keySpan = document.createElement("span");
+        keySpan.className = "tree-key";
+        keySpan.textContent = isIndex ? "[" + k + "]" : String(k);
+        const metaSpan = document.createElement("span");
+        metaSpan.className = "tree-meta";
+        metaSpan.textContent = tLabel;
+        label.appendChild(keySpan);
+        label.appendChild(metaSpan);
+        line.appendChild(label);
+        const childrenContainer = document.createElement("div");
+        childrenContainer.className = "ml-4 border-l border-slate-800/80";
+        childrenContainer.style.display = "none";
+        node.appendChild(childrenContainer);
+        if (childHasChildren) {
+          toggle.addEventListener("click", ev => {
+            ev.stopPropagation();
+            const expanded = childrenContainer.style.display === "block";
+            if (expanded) {
+              childrenContainer.style.display = "none";
+              toggle.textContent = "▸";
+            } else {
+              if (!childrenContainer.hasChildNodes()) {
+                buildChildren(path, childrenContainer);
+              }
+              childrenContainer.style.display = "block";
+              toggle.textContent = "▾";
+            }
+          });
+        }
+        line.addEventListener("click", () => {
+          selectTreeNode(node);
+        });
+        frag.appendChild(node);
+      });
+      containerEl.appendChild(frag);
+    }
+    let selectedTreeNode = null;
+
+    function buildRootTree() {
+      if (!rootJson) {
+        clearTree();
+        return;
+      }
+      treeRootEl.innerHTML = "";
+      buildChildren("", treeRootEl);
+    }
+
+    function selectTreeNode(nodeEl) {
+      const path = nodeEl.dataset.path || "";
+      if (selectedTreeNode) {
+        selectedTreeNode.querySelector(".tree-line")?.classList.remove("selected");
+      }
+      selectedTreeNode = nodeEl;
+      nodeEl.querySelector(".tree-line")?.classList.add("selected");
+      selectedPathEl.value = path;
+    }
+    // === Base Objects extraction ===
+    function buildBaseObjectsFromRoot(root) {
+      const objects = Array.isArray(root.Objects) ?
+        root.Objects :
+        (Array.isArray(root.objects) ? root.objects : null);
+      if (!objects) {
+        baseObjects = null;
+        baseBounds = null;
+        return;
+      }
+      const points = [];
+      let minX = Infinity,
+        minY = Infinity,
+        minZ = Infinity;
+      let maxX = -Infinity,
+        maxY = -Infinity,
+        maxZ = -Infinity;
+      for (const obj of objects) {
+        if (!obj || typeof obj !== "object") continue;
+        const pos = obj.Position || obj.position;
+        if (!Array.isArray(pos) || pos.length < 3) continue;
+        const x = Number(pos[0]) || 0;
+        const y = Number(pos[1]) || 0;
+        const z = Number(pos[2]) || 0;
+        const id = String(obj.ObjectID || obj.objectID || "UNKNOWN");
+        points.push({
+          x,
+          y,
+          z,
+          id,
+          objRef: obj
+        });
+        if (x < minX) minX = x;
+        if (y < minY) minY = y;
+        if (z < minZ) minZ = z;
+        if (x > maxX) maxX = x;
+        if (y > maxY) maxY = y;
+        if (z > maxZ) maxZ = z;
+      }
+      if (!points.length) {
+        baseObjects = null;
+        baseBounds = null;
+        return;
+      }
+      baseObjects = points;
+      baseBounds = {
+        minX,
+        minY,
+        minZ,
+        maxX,
+        maxY,
+        maxZ
+      };
+    }
+    // === GalacticAddress scanning ===
+    function scanGalacticAddresses(root) {
+      const results = [];
+
+      function dfs(node, path, nameHint) {
+        if (!node || typeof node !== "object") return;
+        const hasVoxel = ("VoxelX" in node) && ("VoxelY" in node) && ("VoxelZ" in node);
+        if (hasVoxel) {
+          const voxelX = Number(node.VoxelX) || 0;
+          const voxelY = Number(node.VoxelY) || 0;
+          const voxelZ = Number(node.VoxelZ) || 0;
+          const systemIndex = Number(node.SolarSystemIndex ?? 0) || 0;
+          const planetIndex = Number(node.PlanetIndex ?? 0) || 0;
+          const label = nameHint || (node.BaseName || node.Name || "Entry");
+          results.push({
+            path,
+            voxelX,
+            voxelY,
+            voxelZ,
+            systemIndex,
+            planetIndex,
+            label: String(label)
+          });
+        }
+        if (Array.isArray(node)) {
+          node.forEach((child, idx) => {
+            const childPath = path ? path + "[" + idx + "]" : "[" + idx + "]";
+            dfs(child, childPath, nameHint);
+          });
+        } else {
+          const localName = node.Name || node.BaseName || node.BaseID || node.ID || nameHint;
+          for (const key of Object.keys(node)) {
+            const child = node[key];
+            const childPath = path ? path + "." + key : key;
+            dfs(child, childPath, localName || nameHint);
+          }
+        }
+      }
+      dfs(root, "", null);
+      galacticAddresses = results;
+    }
+
+    function updateAddressListUI() {
+      const listEl = $("addressList");
+      listEl.innerHTML = "";
+      if (!galacticAddresses.length) {
+        listEl.innerHTML =
+          '<div class="px-2 py-1 text-slate-500">No GalacticAddress blocks found (VoxelX/Y/Z).</div>';
+        return;
+      }
+      galacticAddresses.forEach((addr, idx) => {
+        const div = document.createElement("div");
+        div.className =
+          "px-2 py-1 border-b border-slate-800/60 last:border-b-0 cursor-pointer hover:bg-slate-800/60";
+        div.dataset.index = idx;
+        div.innerHTML =
+          `<div class="flex justify-between gap-2">
+             <span class="truncate">${idx}. ${addr.label}</span>
+             <span class="text-slate-400">(${addr.voxelX}, ${addr.voxelY}, ${addr.voxelZ})</span>
+           </div>
+           <div class="text-slate-500">
+             Sys ${addr.systemIndex} · Planet ${addr.planetIndex} · <span class="text-xs text-slate-500">path: ${addr.path}</span>
+           </div>`;
+        div.addEventListener("click", () => {
+          selectGalacticPoint(idx, true);
+        });
+        listEl.appendChild(div);
+      });
+    }
+    // === Tabs ===
+    const tabTreeBtn = $("tabTree");
+    const tabJsonBtn = $("tabJson");
+    const treePanel = $("treePanel");
+    const jsonPanel = $("jsonPanel");
+
+    function setTab(mode) {
+      if (mode === "tree") {
+        treePanel.classList.remove("hidden");
+        jsonPanel.classList.add("hidden");
+        tabTreeBtn.className =
+          "px-3 py-1 rounded-full bg-slate-800 text-slate-100 border border-slate-700";
+        tabJsonBtn.className =
+          "px-3 py-1 rounded-full bg-transparent text-slate-300 border border-transparent hover:border-slate-700";
+      } else {
+        treePanel.classList.add("hidden");
+        jsonPanel.classList.remove("hidden");
+        tabJsonBtn.className =
+          "px-3 py-1 rounded-full bg-slate-800 text-slate-100 border border-slate-700";
+        tabTreeBtn.className =
+          "px-3 py-1 rounded-full bg-transparent text-slate-300 border border-transparent hover:border-slate-700";
+      }
+    }
+    tabTreeBtn.addEventListener("click", () => setTab("tree"));
+    tabJsonBtn.addEventListener("click", () => setTab("json"));
+    treeFilterEl.addEventListener("input", () => {
+      if (!rootJson) return;
+      buildRootTree();
+    });
+    const btnLoadNode = $("btnLoadNode");
+    const btnApplyNode = $("btnApplyNode");
+    const jsonEditor = $("jsonEditor");
+    btnLoadNode.addEventListener("click", () => {
+      if (!rootJson) {
+        setStatus("No JSON loaded.", "error");
+        return;
+      }
+      const path = selectedPathEl.value.trim();
+      if (!path) {
+        setStatus("Select a node in the tree first.", "error");
+        return;
+      }
+      try {
+        const val = getByPath(rootJson, path);
+        if (val === undefined) {
+          setStatus("Path not found.", "error");
+          return;
+        }
+        jsonEditor.value = JSON.stringify(val, null, 2);
+        setTab("json");
+        setStatus("Loaded subtree into raw JSON editor.", "ok");
+      } catch (e) {
+        setStatus("Subtree load error: " + e.message, "error");
+      }
+    });
+    btnApplyNode.addEventListener("click", () => {
+      if (!rootJson) {
+        setStatus("No JSON loaded.", "error");
+        return;
+      }
+      const path = selectedPathEl.value.trim();
+      if (!path) {
+        setStatus("Select a node in the tree first.", "error");
+        return;
+      }
+      try {
+        const raw = jsonEditor.value;
+        const parsed = JSON.parse(optSanitize.checked ? sanitizeNms(raw) : raw);
+        setByPath(rootJson, path, parsed);
+        jsonEditor.value = JSON.stringify(rootJson, null, 2);
+        buildBaseObjectsFromRoot(rootJson);
+        scanGalacticAddresses(rootJson);
+        updateAddressListUI();
+        updateStatsLine();
+        buildRootTree();
+        setStatus("Applied editor JSON back into subtree.", "ok");
+      } catch (e) {
+        setStatus("Apply error: " + e.message, "error");
+      }
+    });
+    // === File / JSON loading ===
+    const fileInputEl = $("fileInput");
+    const btnPasteEl = $("btnPaste");
+    const btnFormatEl = $("btnFormat");
+    const btnExportEl = $("btnExport");
+    const btnCopyJsonEl = $("btnCopyJson");
+    fileInputEl.addEventListener("change", ev => {
+      const file = ev.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        jsonEditor.value = reader.result;
+        rootRaw = reader.result;
+        rootFileName = file.name;
+        fileInfo.textContent = "File: " + file.name;
+        parseRootJsonFromEditor();
+        setStatus("Loaded file: " + file.name, "ok");
+      };
+      reader.onerror = () => setStatus("Failed to read file.", "error");
+      reader.readAsText(file);
+    });
+    btnPasteEl.addEventListener("click", async () => {
+      try {
+        const text = await navigator.clipboard.readText();
+        if (!text) {
+          setStatus("Clipboard is empty.", "error");
+          return;
+        }
+        jsonEditor.value = text;
+        rootRaw = text;
+        parseRootJsonFromEditor();
+        setStatus("Pasted JSON from clipboard.", "ok");
+      } catch (e) {
+        setStatus("Clipboard read failed: " + e.message, "error");
+      }
+    });
+    btnFormatEl.addEventListener("click", () => {
+      const raw = jsonEditor.value.trim();
+      if (!raw) {
+        setStatus("Editor is empty.", "error");
+        return;
+      }
+      try {
+        const parsed = JSON.parse(optSanitize.checked ? sanitizeNms(raw) : raw);
+        jsonEditor.value = JSON.stringify(parsed, null, 2);
+        rootJson = parsed;
+        rootRaw = jsonEditor.value;
+        buildRootTree();
+        buildBaseObjectsFromRoot(rootJson);
+        scanGalacticAddresses(rootJson);
+        updateAddressListUI();
+        updateStatsLine();
+        setStatus("JSON valid & pretty-printed.", "ok");
+      } catch (e) {
+        setStatus("JSON error: " + e.message, "error");
+      }
+    });
+    btnExportEl.addEventListener("click", () => {
+      let text = jsonEditor.value.trim();
+      if (!text) {
+        setStatus("Nothing to download.", "error");
+        return;
+      }
+      if (optSanitize.checked) {
+        text = unsanitizeNms(text);
+      }
+      let filename = rootFileName || "nms.json";
+      try {
+        const parsed = JSON.parse(optSanitize.checked ? sanitizeNms(jsonEditor.value) : jsonEditor.value);
+        if (parsed && typeof parsed === "object" && typeof parsed.Name === "string") {
+          filename = parsed.Name.replace(/[^a-z0-9_\-]+/gi, "_") + ".json";
+        }
+      } catch {
+        // keep filename
+      }
+      downloadBlob(text, filename);
+      setStatus(`JSON downloaded as "${filename}".`, "ok");
+    });
+    btnCopyJsonEl.addEventListener("click", async () => {
+      let text = jsonEditor.value.trim();
+      if (!text) {
+        setStatus("Nothing to copy.", "error");
+        return;
+      }
+      if (optSanitize.checked) {
+        text = unsanitizeNms(text);
+      }
+      try {
+        await copyToClipboard(text);
+        setStatus("JSON copied to clipboard.", "ok");
+      } catch (e) {
+        setStatus("Copy failed: " + e.message, "error");
+      }
+    });
+
+    function parseRootJsonFromEditor() {
+      const raw = jsonEditor.value.trim();
+      if (!raw) {
+        rootJson = null;
+        clearTree();
+        baseObjects = null;
+        baseBounds = null;
+        galacticAddresses = [];
+        updateAddressListUI();
+        updateStatsLine();
+        return;
+      }
+      try {
+        const text = optSanitize.checked ? sanitizeNms(raw) : raw;
+        const parsed = JSON.parse(text);
+        rootJson = parsed;
+        buildRootTree();
+        buildBaseObjectsFromRoot(rootJson);
+        scanGalacticAddresses(rootJson);
+        updateAddressListUI();
+        updateStatsLine();
+      } catch (e) {
+        rootJson = null;
+        clearTree();
+        baseObjects = null;
+        baseBounds = null;
+        galacticAddresses = [];
+        updateAddressListUI();
+        updateStatsLine();
+        setStatus("JSON parse failed: " + e.message, "error");
+      }
+    }
+    // === 3D / Three.js ===
+    const canvas = $("threeCanvas");
+    const selectionLabel = $("selectionLabel");
+    const statsLine = $("statsLine");
+    const moveStepInput = $("moveStep");
+    const posXInput = $("posX");
+    const posYInput = $("posY");
+    const posZInput = $("posZ");
+    const btnXminus = $("btnXminus");
+    const btnXplus = $("btnXplus");
+    const btnYminus = $("btnYminus");
+    const btnYplus = $("btnYplus");
+    const btnZminus = $("btnZminus");
+    const btnZplus = $("btnZplus");
+    const btnApplyPos = $("btnApplyPos");
+    const btnSyncJson = $("btnSyncJson");
+    const btnFrameAll = $("btnFrameAll");
+    const btnResetCam = $("btnResetCamera");
+    const btnModeObjects = $("btnModeObjects");
+    const btnModeGalaxy = $("btnModeGalaxy");
+    const moveControls = $("moveControls");
+    let renderer, scene, camera, controls;
+    let initialCamPosition = null;
+    let objectsMesh = null;
+    let galaxyMesh = null;
+    let selectedIndex = null;
+    let selectedMarker = null;
+    const raycaster = new THREE.Raycaster();
+    const pointer = new THREE.Vector2();
+    let galaxySelectedIndex = null;
+    let galaxyMarker = null;
+    let currentMode = "objects";
+
+    function getCanvasSize() {
+      const rect = canvas.getBoundingClientRect();
+      let w = rect.width;
+      let h = rect.height;
+      if (!w || !h) {
+        w = window.innerWidth * 0.5;
+        h = window.innerHeight * 0.5;
+      }
+      return {
+        w,
+        h
+      };
+    }
+
+    function hashColorFromString(str) {
+      let hash = 0;
+      for (let i = 0; i < str.length; i++) {
+        hash = (hash * 31 + str.charCodeAt(i)) >>> 0;
+      }
+      const r = (hash & 0xff0000) >> 16;
+      const g = (hash & 0x00ff00) >> 8;
+      const b = (hash & 0x0000ff);
+      return new THREE.Color(r / 255, g / 255, b / 255);
+    }
+
+    function initThree() {
+      try {
+        scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x020617);
+        const {
+          w,
+          h
+        } = getCanvasSize();
+        camera = new THREE.PerspectiveCamera(60, w / h, 0.1, 500000);
+        camera.position.set(150, 120, 150);
+        initialCamPosition = camera.position.clone();
+        renderer = new THREE.WebGLRenderer({
+          canvas,
+          antialias: true
+        });
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+        renderer.setSize(w, h, false);
+        controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.08;
+        controls.enablePan = true;
+        const axes = new THREE.AxesHelper(80);
+        axes.material.depthTest = false;
+        axes.renderOrder = 2;
+        scene.add(axes);
+        const grid = new THREE.GridHelper(600, 60, 0x93c5fd, 0x1d4ed8);
+        grid.position.y = 0;
+        grid.material.opacity = 0.5;
+        grid.material.transparent = true;
+        scene.add(grid);
+        const cubeGeom = new THREE.BoxGeometry(10, 10, 10);
+        const cubeMat = new THREE.MeshStandardMaterial({
+          color: 0xfacc15,
+          emissive: 0xfacc15,
+          emissiveIntensity: 0.3
+        });
+        const cube = new THREE.Mesh(cubeGeom, cubeMat);
+        scene.add(cube);
+        const hemi = new THREE.HemisphereLight(0xffffff, 0x111827, 1.0);
+        scene.add(hemi);
+        window.addEventListener("resize", onWindowResize);
+        renderer.domElement.addEventListener("pointerdown", onPointerDown);
+        animate();
+      } catch (e) {
+        console.error(e);
+        setStatus("WebGL / Three.js init failed.", "error");
+      }
+    }
+
+    function onWindowResize() {
+      if (!renderer || !camera) return;
+      const {
+        w,
+        h
+      } = getCanvasSize();
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+      renderer.setSize(w, h, false);
+    }
+
+    function animate() {
+      requestAnimationFrame(animate);
+      if (controls) controls.update();
+      if (renderer && scene && camera) {
+        renderer.render(scene, camera);
+      }
+    }
+
+    function clearMesh(kind) {
+      const mesh = (kind === "objects") ? objectsMesh : galaxyMesh;
+      if (mesh && scene) {
+        scene.remove(mesh);
+        mesh.geometry.dispose();
+        mesh.material.dispose();
+        if (kind === "objects") objectsMesh = null;
+        else galaxyMesh = null;
+      }
+    }
+
+    function updateStatsLine() {
+      const objCount = baseObjects ? baseObjects.length : 0;
+      const addrCount = galacticAddresses ? galacticAddresses.length : 0;
+      statsLine.textContent = `Objects: ${objCount} · Galactic addresses: ${addrCount}`;
+    }
+
+    function updateObjectsMesh() {
+      clearMesh("objects");
+      selectedIndex = null;
+      if (selectedMarker) {
+        scene.remove(selectedMarker);
+        selectedMarker.geometry.dispose();
+        selectedMarker.material.dispose();
+        selectedMarker = null;
+      }
+      if (!baseObjects || !baseObjects.length) {
+        selectionLabel.textContent = "No base Objects[] found with Position [x,y,z].";
+        updateStatsLine();
+        return;
+      }
+      const count = baseObjects.length;
+      const positions = new Float32Array(count * 3);
+      const colors = new Float32Array(count * 3);
+      for (let i = 0; i < count; i++) {
+        const p = baseObjects[i];
+        const idx = i * 3;
+        positions[idx] = p.x;
+        positions[idx + 1] = p.y;
+        positions[idx + 2] = p.z;
+        const col = hashColorFromString(p.id || "UNKNOWN");
+        colors[idx] = col.r;
+        colors[idx + 1] = col.g;
+        colors[idx + 2] = col.b;
+      }
+      const geom = new THREE.BufferGeometry();
+      geom.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+      geom.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+      const size = Math.max(1.2, Math.min(5, Math.cbrt(count)));
+      const mat = new THREE.PointsMaterial({
+        size,
+        sizeAttenuation: true,
+        vertexColors: true
+      });
+      objectsMesh = new THREE.Points(geom, mat);
+      scene.add(objectsMesh);
+      selectionLabel.textContent =
+        "Base Objects mode: tap a point to select and nudge.";
+      updateStatsLine();
+      frameAll();
+    }
+
+    function updateGalaxyMesh() {
+      clearMesh("galaxy");
+      galaxySelectedIndex = null;
+      if (galaxyMarker) {
+        scene.remove(galaxyMarker);
+        galaxyMarker.geometry.dispose();
+        galaxyMarker.material.dispose();
+        galaxyMarker = null;
+      }
+      if (!galacticAddresses || !galacticAddresses.length) {
+        selectionLabel.textContent =
+          "No GalacticAddress entries found. Hit Scan & Plot.";
+        updateStatsLine();
+        return;
+      }
+      const count = galacticAddresses.length;
+      const positions = new Float32Array(count * 3);
+      const colors = new Float32Array(count * 3);
+      const scale = 1;
+      let minX = Infinity,
+        minY = Infinity,
+        minZ = Infinity;
+      let maxX = -Infinity,
+        maxY = -Infinity,
+        maxZ = -Infinity;
+      for (let i = 0; i < count; i++) {
+        const a = galacticAddresses[i];
+        const x = a.voxelX * scale;
+        const y = a.voxelY * scale;
+        const z = a.voxelZ * scale;
+        const idx = i * 3;
+        positions[idx] = x;
+        positions[idx + 1] = y;
+        positions[idx + 2] = z;
+        const col = hashColorFromString(
+          `${a.systemIndex}_${a.planetIndex}_${a.label}`
+        );
+        colors[idx] = col.r;
+        colors[idx + 1] = col.g;
+        colors[idx + 2] = col.b;
+        if (x < minX) minX = x;
+        if (y < minY) minY = y;
+        if (z < minZ) minZ = z;
+        if (x > maxX) maxX = x;
+        if (y > maxY) maxY = y;
+        if (z > maxZ) maxZ = z;
+      }
+      const geom = new THREE.BufferGeometry();
+      geom.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+      geom.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+      const size = Math.max(1.2, Math.min(4, Math.cbrt(count)));
+      const mat = new THREE.PointsMaterial({
+        size,
+        sizeAttenuation: true,
+        vertexColors: true
+      });
+      galaxyMesh = new THREE.Points(geom, mat);
+      scene.add(galaxyMesh);
+      selectionLabel.textContent =
+        "Galactic mode: click an entry in the list to frame it.";
+      updateStatsLine();
+      const sx = maxX - minX;
+      const sy = maxY - minY;
+      const sz = maxZ - minZ;
+      const maxSize = Math.max(sx, sy, sz, 10);
+      const cx = (minX + maxX) * 0.5;
+      const cy = (minY + maxY) * 0.5;
+      const cz = (minZ + maxZ) * 0.5;
+      const dist = maxSize * 1.8;
+      camera.position.set(cx + dist, cy + dist, cz + dist);
+      camera.lookAt(cx, cy, cz);
+      controls.target.set(cx, cy, cz);
+      controls.update();
+    }
+
+    function frameAll() {
+      if (currentMode === "objects" && baseBounds) {
+        const b = baseBounds;
+        const cx = (b.minX + b.maxX) * 0.5;
+        const cy = (b.minY + b.maxY) * 0.5;
+        const cz = (b.minZ + b.maxZ) * 0.5;
+        const sx = b.maxX - b.minX;
+        const sy = b.maxY - b.minY;
+        const sz = b.maxZ - b.minZ;
+        const maxSize = Math.max(sx, sy, sz, 10);
+        const dist = maxSize * 1.8;
+        camera.position.set(cx + dist, cy + dist, cz + dist);
+        camera.lookAt(cx, cy, cz);
+        controls.target.set(cx, cy, cz);
+        controls.update();
+      } else if (currentMode === "galaxy" && galacticAddresses.length) {
+        updateGalaxyMesh();
+      }
+    }
+
+    function resetCamera() {
+      if (!initialCamPosition) return;
+      camera.position.copy(initialCamPosition);
+      controls.target.set(0, 0, 0);
+      controls.update();
+    }
+    btnFrameAll.addEventListener("click", frameAll);
+    btnResetCam.addEventListener("click", resetCamera);
+
+    function setMode(mode) {
+      currentMode = mode;
+      if (mode === "objects") {
+        btnModeObjects.className =
+          "px-2.5 py-1 rounded-full bg-emerald-600 hover:bg-emerald-500";
+        btnModeGalaxy.className =
+          "px-2.5 py-1 rounded-full bg-slate-800/80 hover:bg-slate-700/90";
+        moveControls.classList.remove("hidden");
+        updateObjectsMesh();
+      } else {
+        btnModeGalaxy.className =
+          "px-2.5 py-1 rounded-full bg-sky-600 hover:bg-sky-500";
+        btnModeObjects.className =
+          "px-2.5 py-1 rounded-full bg-slate-800/80 hover:bg-slate-700/90";
+        moveControls.classList.add("hidden");
+        updateGalaxyMesh();
+      }
+    }
+    btnModeObjects.addEventListener("click", () => setMode("objects"));
+    btnModeGalaxy.addEventListener("click", () => setMode("galaxy"));
+
+    function getStep() {
+      const v = parseFloat(moveStepInput.value);
+      return Number.isNaN(v) || !Number.isFinite(v) ? 1 : v;
+    }
+
+    function onPointerDown(event) {
+      if (currentMode !== "objects") return;
+      if (!objectsMesh || !camera || !renderer) return;
+      const rect = renderer.domElement.getBoundingClientRect();
+      const x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      const y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+      pointer.set(x, y);
+      raycaster.setFromCamera(pointer, camera);
+      const intersects = raycaster.intersectObject(objectsMesh);
+      if (intersects.length > 0) {
+        const idx = intersects[0].index;
+        selectObjectPoint(idx);
+      }
+    }
+
+    function selectObjectPoint(index) {
+      if (!objectsMesh || !baseObjects || !baseObjects[index]) return;
+      selectedIndex = index;
+      const posAttr = objectsMesh.geometry.attributes.position;
+      const x = posAttr.getX(index);
+      const y = posAttr.getY(index);
+      const z = posAttr.getZ(index);
+      posXInput.value = x.toFixed(3);
+      posYInput.value = y.toFixed(3);
+      posZInput.value = z.toFixed(3);
+      const data = baseObjects[index];
+      const id = data.id || "UNKNOWN";
+      selectionLabel.textContent =
+        `Selected object #${index} · ${id} · XYZ = (${x.toFixed(3)}, ${y.toFixed(3)}, ${z.toFixed(3)})`;
+      if (!selectedMarker) {
+        const g = new THREE.SphereGeometry(4, 16, 16);
+        const m = new THREE.MeshBasicMaterial({
+          color: 0xfff000
+        });
+        selectedMarker = new THREE.Mesh(g, m);
+        scene.add(selectedMarker);
+      }
+      selectedMarker.position.set(x, y, z);
+    }
+
+    function nudgeSelected(axis, delta) {
+      if (selectedIndex == null || !objectsMesh || !baseObjects) return;
+      const posAttr = objectsMesh.geometry.attributes.position;
+      let x = posAttr.getX(selectedIndex);
+      let y = posAttr.getY(selectedIndex);
+      let z = posAttr.getZ(selectedIndex);
+      if (axis === "x") x += delta;
+      else if (axis === "y") y += delta;
+      else if (axis === "z") z += delta;
+      posAttr.setXYZ(selectedIndex, x, y, z);
+      posAttr.needsUpdate = true;
+      const data = baseObjects[selectedIndex];
+      data.x = x;
+      data.y = y;
+      data.z = z;
+      if (data.objRef && Array.isArray(data.objRef.Position)) {
+        data.objRef.Position[0] = x;
+        data.objRef.Position[1] = y;
+        data.objRef.Position[2] = z;
+      }
+      if (selectedMarker) selectedMarker.position.set(x, y, z);
+      posXInput.value = x.toFixed(3);
+      posYInput.value = y.toFixed(3);
+      posZInput.value = z.toFixed(3);
+      selectionLabel.textContent =
+        `Selected object #${selectedIndex} · ${data.id || "UNKNOWN"} · XYZ = (${x.toFixed(3)}, ${y.toFixed(3)}, ${z.toFixed(3)})`;
+      setStatus(`Moved object #${selectedIndex} ${axis} by ${delta}`, "ok");
+    }
+
+    function applyPosFromInputs() {
+      if (selectedIndex == null || !objectsMesh || !baseObjects) return;
+      const posAttr = objectsMesh.geometry.attributes.position;
+      const x = parseFloat(posXInput.value);
+      const y = parseFloat(posYInput.value);
+      const z = parseFloat(posZInput.value);
+      if ([x, y, z].some(v => Number.isNaN(v))) {
+        setStatus("Invalid XYZ values.", "error");
+        return;
+      }
+      posAttr.setXYZ(selectedIndex, x, y, z);
+      posAttr.needsUpdate = true;
+      const data = baseObjects[selectedIndex];
+      data.x = x;
+      data.y = y;
+      data.z = z;
+      if (data.objRef && Array.isArray(data.objRef.Position)) {
+        data.objRef.Position[0] = x;
+        data.objRef.Position[1] = y;
+        data.objRef.Position[2] = z;
+      }
+      if (selectedMarker) selectedMarker.position.set(x, y, z);
+      selectionLabel.textContent =
+        `Selected object #${selectedIndex} · ${data.id || "UNKNOWN"} · XYZ = (${x.toFixed(3)}, ${y.toFixed(3)}, ${z.toFixed(3)})`;
+      setStatus("Updated object position from XYZ inputs.", "ok");
+    }
+    btnXminus.addEventListener("click", () => nudgeSelected("x", -getStep()));
+    btnXplus.addEventListener("click", () => nudgeSelected("x", getStep()));
+    btnYminus.addEventListener("click", () => nudgeSelected("y", -getStep()));
+    btnYplus.addEventListener("click", () => nudgeSelected("y", getStep()));
+    btnZminus.addEventListener("click", () => nudgeSelected("z", -getStep()));
+    btnZplus.addEventListener("click", () => nudgeSelected("z", getStep()));
+    btnApplyPos.addEventListener("click", applyPosFromInputs);
+    btnSyncJson.addEventListener("click", () => {
+      if (!rootJson) {
+        setStatus("Nothing loaded yet.", "error");
+        return;
+      }
+      jsonEditor.value = JSON.stringify(rootJson, null, 2);
+      rootRaw = jsonEditor.value;
+      setStatus("Re-pretty-printed full JSON after position edits.", "ok");
+    });
+
+    function selectGalacticPoint(index, frame) {
+      if (!galaxyMesh || !galacticAddresses[index]) return;
+      galaxySelectedIndex = index;
+      const addr = galacticAddresses[index];
+      const posAttr = galaxyMesh.geometry.attributes.position;
+      const x = posAttr.getX(index);
+      const y = posAttr.getY(index);
+      const z = posAttr.getZ(index);
+      if (!galaxyMarker) {
+        const g = new THREE.SphereGeometry(8, 18, 18);
+        const m = new THREE.MeshBasicMaterial({
+          color: 0xfff000
+        });
+        galaxyMarker = new THREE.Mesh(g, m);
+        scene.add(galaxyMarker);
+      }
+      galaxyMarker.position.set(x, y, z);
+      selectionLabel.textContent =
+        `GalacticAddress #${index} · ${addr.label} · Voxel=(${addr.voxelX}, ${addr.voxelY}, ${addr.voxelZ}) · Sys ${addr.systemIndex}, Planet ${addr.planetIndex}`;
+      if (frame) {
+        camera.position.set(x + 200, y + 200, z + 200);
+        camera.lookAt(x, y, z);
+        controls.target.set(x, y, z);
+        controls.update();
+      }
+    }
+    const btnScanAddresses = $("btnScanAddresses");
+    btnScanAddresses.addEventListener("click", () => {
+      if (!rootJson) {
+        setStatus("No JSON loaded.", "error");
+        return;
+      }
+      scanGalacticAddresses(rootJson);
+      updateAddressListUI();
+      updateStatsLine();
+      setStatus(`Found ${galacticAddresses.length} GalacticAddress block(s).`, "ok");
+      if (currentMode === "galaxy") {
+        updateGalaxyMesh();
+      }
+    });
+    // Boot
+    initThree();
+    updateStatsLine();
+    setMode("objects");
+    setStatus("Idle. Load/paste JSON, then use Base Objects or Galactic Map.", "info");
+  </script>
+</body>
+
+</html>
