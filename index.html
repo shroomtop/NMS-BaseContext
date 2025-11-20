@@ -2,1492 +2,2518 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>NMS Base + Galactic Address Plotter</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>NMS Galactic Lab [Architect Edition – Minimal]</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-  <!-- Tailwind -->
-  <script src="https://cdn.tailwindcss.com"></script>
-
-  <!-- Three.js -->
+  <!-- Three.js (non-module, CDN) -->
   <script src="https://unpkg.com/three@0.148.0/build/three.min.js"></script>
 
   <style>
-    html, body {
-      height: 100%;
-    }
-    body {
+    /* Basic Reset */
+    *, *::before, *::after {
+      box-sizing: border-box;
       margin: 0;
-      background: radial-gradient(circle at top, #020617, #020617 65%);
-      color: #e5e7eb;
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      padding: 0;
     }
-    #jsonEditor {
-      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
-        "Liberation Mono", "Courier New", monospace;
-      tab-size: 2;
-      -moz-tab-size: 2;
-      white-space: pre;
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
     }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+      background-color: #1f1f23;
+      background-image:
+        radial-gradient(circle at 0 0, rgba(255,255,255,0.04) 0, transparent 55%),
+        radial-gradient(circle at 100% 100%, rgba(255,255,255,0.04) 0, transparent 55%);
+      color: #f5f5f5;
+      display: flex;
+    }
+
+    /* Glassmorphism Panel Base */
+    .glass {
+      background: rgba(255, 255, 255, 0.06);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 10px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+    }
+
+    /* Scrollbar styling */
     .scroll-thin::-webkit-scrollbar {
       width: 6px;
       height: 6px;
     }
     .scroll-thin::-webkit-scrollbar-thumb {
-      background: #475569;
-      border-radius: 9999px;
+      background: rgba(200, 200, 200, 0.4);
+      border-radius: 999px;
     }
     .scroll-thin::-webkit-scrollbar-track {
       background: transparent;
     }
-    #threeCanvas {
+
+    /* App Layout */
+    #app-container {
+      display: flex;
       width: 100%;
       height: 100%;
-      min-height: 260px;
-      display: block;
-      touch-action: none;
+      padding: 10px;
+      gap: 10px;
     }
-    #galacticCanvas {
+
+    .sidebar {
+      width: 260px;
+      height: 100%;
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      overflow: hidden;
+    }
+
+    #center-panel {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    /* Left Panel */
+    #header-block {
+      padding: 8px 10px;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+
+    #header-title {
+      font-weight: 600;
+      font-size: 14px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #a5b4fc;
+    }
+
+    #header-sub {
+      margin-top: 2px;
+      font-size: 11px;
+      color: #9ca3af;
+    }
+
+    #file-controls {
+      display: flex;
+      gap: 6px;
+      padding: 8px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+
+    .btn, .btn-label {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 6px 10px;
+      border-radius: 6px;
+      font-size: 11px;
+      border: 1px solid rgba(255,255,255,0.16);
+      background: rgba(15,15,20,0.85);
+      color: #e5e7eb;
+      cursor: pointer;
+      transition: background 0.15s ease, border-color 0.15s ease, transform 0.05s ease;
+      white-space: nowrap;
+    }
+
+    .btn:hover,
+    .btn-label:hover {
+      background: rgba(35,35,45,0.95);
+      border-color: rgba(255,255,255,0.35);
+    }
+
+    .btn:active,
+    .btn-label:active {
+      transform: scale(0.97);
+    }
+
+    .btn-primary {
+      background: #22c55e;
+      border-color: #16a34a;
+      color: #022c22;
+      font-weight: 600;
+    }
+
+    .btn-primary:hover {
+      background: #4ade80;
+      border-color: #16a34a;
+    }
+
+    #fileInput {
+      display: none;
+    }
+
+    #context-block {
+      padding: 8px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      font-size: 11px;
+    }
+
+    #ctx-label-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 4px;
+    }
+
+    #ctx-label-row span:first-child {
+      color: #9ca3af;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      font-size: 10px;
+    }
+
+    #ctx-status {
+      font-weight: 600;
+      font-size: 10px;
+    }
+
+    #ctx-details {
+      font-family: SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size: 10px;
+      color: #9ca3af;
+      word-break: break-all;
+      margin-bottom: 6px;
+    }
+
+    #btnInjectContext {
       width: 100%;
-      height: 220px;
-      display: block;
-      background: #020617;
-      border-radius: 0.75rem;
+      font-size: 11px;
+    }
+
+    #btnInjectContext:disabled {
+      opacity: 0.35;
+      cursor: not-allowed;
+    }
+
+    #base-list-label {
+      margin-top: 4px;
+      margin-bottom: 4px;
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      color: #9ca3af;
+    }
+
+    #baseList {
+      flex: 1;
+      overflow-y: auto;
+      padding-right: 2px;
+      font-size: 11px;
+    }
+
+    .base-group {
+      border-radius: 7px;
+      border: 1px solid rgba(148,163,184,0.24);
+      margin-bottom: 6px;
+      overflow: hidden;
+      background: rgba(15,23,42,0.45);
+    }
+
+    .base-group-header {
+      padding: 4px 7px;
+      font-size: 10px;
+      font-family: SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      color: #6b7280;
+      background: rgba(15,23,42,0.8);
+      border-bottom: 1px solid rgba(148,163,184,0.24);
+    }
+
+    .base-item-btn {
+      width: 100%;
+      text-align: left;
+      padding: 5px 8px;
+      border: none;
+      background: transparent;
+      color: #d1d5db;
+      cursor: pointer;
+      font-size: 11px;
+      border-left: 2px solid transparent;
+      transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+      overflow: hidden;
+    }
+
+    .base-item-btn:hover {
+      background: rgba(30,64,175,0.25);
+    }
+
+    .base-item-btn.active {
+      background: rgba(37,99,235,0.25);
+      color: #e5e7eb;
+      border-color: #60a5fa;
+    }
+
+    /* Center Panel */
+    #toolbar {
+      height: 38px;
+      padding: 6px 10px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    #toolbar-title {
+      font-size: 11px;
+      color: #9ca3af;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    #toolbar-controls {
+      display: flex;
+      gap: 6px;
+    }
+
+    #canvas-area {
+      flex: 1;
+      position: relative;
+      border-radius: 10px;
+      overflow: hidden;
+      background-color: #202329;
+      background-image: radial-gradient(circle, rgba(255,255,255,0.05) 1px, transparent 1px);
+      background-size: 26px 26px;
+    }
+
+    #canvas-container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+    }
+
+    /* Right Panel */
+    #selection-block {
+      padding-bottom: 8px;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      font-size: 11px;
+    }
+
+    #selection-title {
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      color: #9ca3af;
+      margin-bottom: 4px;
+    }
+
+    #selection-info,
+    #no-selection {
+      margin-top: 4px;
+    }
+
+    #no-selection {
+      color: #6b7280;
+      font-size: 11px;
+    }
+
+    .field-group {
+      margin-bottom: 6px;
+    }
+
+    .field-label {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #9ca3af;
+      margin-bottom: 2px;
+    }
+
+    .mono-input {
+      width: 100%;
+      padding: 4px 6px;
+      border-radius: 6px;
+      border: 1px solid rgba(148,163,184,0.45);
+      background: rgba(15,23,42,0.9);
+      color: #e5e7eb;
+      font-size: 11px;
+      font-family: SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    }
+
+    .mono-input[readonly] {
+      opacity: 0.7;
+    }
+
+    #xyz-grid {
+      display: grid;
+      grid-template-columns: 20px 1fr 40px 40px;
+      gap: 4px;
+      align-items: center;
+      margin-top: 4px;
+    }
+
+    .axis-label {
+      font-weight: 700;
+      font-size: 11px;
+      text-align: center;
+    }
+
+    .axis-label.x { color: #f97373; }
+    .axis-label.y { color: #4ade80; }
+    .axis-label.z { color: #60a5fa; }
+
+    .btn-small {
+      font-size: 10px;
+      padding: 3px 4px;
+    }
+
+    #storage-box {
+      margin-top: 6px;
+      padding: 4px 6px;
+      border-radius: 6px;
+      background: rgba(15,23,42,0.9);
+      border: 1px solid rgba(148,163,184,0.4);
+      font-size: 10px;
+    }
+
+    #storage-label {
+      color: #9ca3af;
+      margin-bottom: 2px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-size: 9px;
+    }
+
+    #storage-format {
+      font-family: SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      color: #e5e7eb;
+      font-size: 11px;
+    }
+
+    /* Global Offset Block */
+    #offset-block {
+      padding-top: 8px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      font-size: 11px;
+    }
+
+    #offset-title {
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      color: #fca5a5;
+      margin-bottom: 4px;
+    }
+
+    #offset-desc {
+      font-size: 10px;
+      color: #9ca3af;
+      margin-bottom: 6px;
+    }
+
+    #offset-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 4px;
+      margin-bottom: 6px;
+    }
+
+    #btnOffsetBase {
+      width: 100%;
+      font-size: 11px;
+      background: #ef4444;
+      border-color: #b91c1c;
+      color: #f9fafb;
+      font-weight: 600;
+    }
+
+    #btnOffsetBase:hover {
+      background: #f97373;
+    }
+
+    /* Debugger Block */
+    #debug-block {
+      padding-top: 8px;
+      font-size: 10px;
+    }
+
+    #debug-title {
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      color: #9ca3af;
+      margin-bottom: 4px;
+    }
+
+    .debug-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 2px;
+    }
+
+    .debug-label {
+      color: #9ca3af;
+    }
+
+    .debug-value {
+      font-family: SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      color: #e5e7eb;
+    }
+
+    /* Small screen fallback: stack panels */
+    @media (max-width: 960px) {
+      #app-container {
+        flex-direction: column;
+      }
+      .sidebar {
+        width: 100%;
+        height: auto;
+        min-height: 150px;
+      }
+      #center-panel {
+        height: 50vh;
+      }
     }
   </style>
-
-  <!-- Embedded OrbitControls (pointer + touch + wheel, minimal) -->
-  <script>
-    (function () {
-      THREE.OrbitControls = function (object, domElement) {
-        const scope = this;
-        this.object = object;
-        this.domElement = domElement || document;
-        this.enabled = true;
-        this.target = new THREE.Vector3();
-        this.minDistance = 0;
-        this.maxDistance = Infinity;
-        this.enableDamping = true;
-        this.dampingFactor = 0.08;
-        this.enableZoom = true;
-        this.zoomSpeed = 1.0;
-        this.enableRotate = true;
-        this.rotateSpeed = 1.0;
-        this.enablePan = true;
-        this.panSpeed = 1.0;
-
-        const STATE = { NONE: -1, ROTATE: 0, DOLLY: 1, PAN: 2 };
-        let state = STATE.NONE;
-
-        const spherical = new THREE.Spherical();
-        const sphericalDelta = new THREE.Spherical();
-        let scale = 1;
-        const panOffset = new THREE.Vector3();
-        let zoomChanged = false;
-
-        const rotateStart = new THREE.Vector2();
-        const rotateEnd = new THREE.Vector2();
-        const rotateDelta = new THREE.Vector2();
-
-        const panStart = new THREE.Vector2();
-        const panEnd = new THREE.Vector2();
-        const panDelta = new THREE.Vector2();
-
-        const dollyStart = new THREE.Vector2();
-        const dollyEnd = new THREE.Vector2();
-        const dollyDelta = new THREE.Vector2();
-
-        function getAutoDistance() {
-          const offset = new THREE.Vector3();
-          offset.copy(scope.object.position).sub(scope.target);
-          return offset.length();
-        }
-
-        this.update = function () {
-          const offset = new THREE.Vector3();
-          offset.copy(scope.object.position).sub(scope.target);
-          spherical.setFromVector3(offset);
-
-          spherical.theta += sphericalDelta.theta;
-          spherical.phi += sphericalDelta.phi;
-
-          const EPS = 1e-6;
-          const minPhi = EPS;
-          const maxPhi = Math.PI - EPS;
-          spherical.phi = Math.max(minPhi, Math.min(maxPhi, spherical.phi));
-
-          spherical.radius *= scale;
-          spherical.radius = Math.max(
-            scope.minDistance,
-            Math.min(scope.maxDistance, spherical.radius)
-          );
-
-          scope.target.add(panOffset);
-          offset.setFromSpherical(spherical);
-          scope.object.position.copy(scope.target).add(offset);
-          scope.object.lookAt(scope.target);
-
-          sphericalDelta.set(0, 0, 0);
-          scale = 1;
-          panOffset.set(0, 0, 0);
-
-          if (scope.enableDamping) {
-            rotateDelta.multiplyScalar(1 - scope.dampingFactor);
-            panDelta.multiplyScalar(1 - scope.dampingFactor);
-          } else {
-            rotateDelta.set(0, 0);
-            panDelta.set(0, 0);
-          }
-          return zoomChanged;
-        };
-
-        // mouse handlers
-        function handleMouseDownRotate(event) {
-          rotateStart.set(event.clientX, event.clientY);
-        }
-        function handleMouseDownPan(event) {
-          panStart.set(event.clientX, event.clientY);
-        }
-        function handleMouseDownDolly(event) {
-          dollyStart.set(event.clientX, event.clientY);
-        }
-        function handleMouseMoveRotate(event) {
-          rotateEnd.set(event.clientX, event.clientY);
-          rotateDelta
-            .subVectors(rotateEnd, rotateStart)
-            .multiplyScalar(scope.rotateSpeed / 200);
-          sphericalDelta.theta -= 2 * Math.PI * rotateDelta.x;
-          sphericalDelta.phi -= 2 * Math.PI * rotateDelta.y;
-          rotateStart.copy(rotateEnd);
-        }
-        function handleMouseMovePan(event) {
-          panEnd.set(event.clientX, event.clientY);
-          panDelta.subVectors(panEnd, panStart).multiplyScalar(scope.panSpeed / 100);
-          const distance = getAutoDistance();
-          panOffset.x -= (2 * panDelta.x * distance) / window.innerHeight;
-          panOffset.y += (2 * panDelta.y * distance) / window.innerHeight;
-          panStart.copy(panEnd);
-        }
-        function handleMouseMoveDolly(event) {
-          dollyEnd.set(event.clientX, event.clientY);
-          dollyDelta.subVectors(dollyEnd, dollyStart);
-          if (dollyDelta.y > 0) scale *= 1.05;
-          else if (dollyDelta.y < 0) scale /= 1.05;
-          dollyStart.copy(dollyEnd);
-          zoomChanged = true;
-        }
-
-        function onMouseDown(event) {
-          if (!scope.enabled) return;
-          event.preventDefault();
-          switch (event.button) {
-            case 0:
-              state = STATE.ROTATE;
-              handleMouseDownRotate(event);
-              break;
-            case 1:
-              state = STATE.DOLLY;
-              handleMouseDownDolly(event);
-              break;
-            case 2:
-              state = STATE.PAN;
-              handleMouseDownPan(event);
-              break;
-          }
-          scope.domElement.addEventListener("mousemove", onMouseMove, false);
-          scope.domElement.addEventListener("mouseup", onMouseUp, false);
-        }
-        function onMouseMove(event) {
-          if (!scope.enabled) return;
-          event.preventDefault();
-          switch (state) {
-            case STATE.ROTATE:
-              handleMouseMoveRotate(event);
-              break;
-            case STATE.DOLLY:
-              handleMouseMoveDolly(event);
-              break;
-            case STATE.PAN:
-              handleMouseMovePan(event);
-              break;
-          }
-        }
-        function onMouseUp() {
-          scope.domElement.removeEventListener("mousemove", onMouseMove, false);
-          scope.domElement.removeEventListener("mouseup", onMouseUp, false);
-          state = STATE.NONE;
-        }
-        function onMouseWheel(event) {
-          if (!scope.enabled || !scope.enableZoom) return;
-          event.preventDefault();
-          if (event.deltaY < 0) scale /= 1.08;
-          else scale *= 1.08;
-          zoomChanged = true;
-        }
-
-        // touch: 1 finger rotate, 2 fingers pan+zoom
-        function getTouchDistance(event) {
-          const dx = event.touches[0].pageX - event.touches[1].pageX;
-          const dy = event.touches[0].pageY - event.touches[1].pageY;
-          return Math.sqrt(dx * dx + dy * dy);
-        }
-        let lastTouchDistance = null;
-
-        function onTouchStart(event) {
-          if (!scope.enabled) return;
-          const touches = event.touches;
-          if (touches.length === 1) {
-            state = STATE.ROTATE;
-            rotateStart.set(touches[0].pageX, touches[0].pageY);
-          } else if (touches.length === 2) {
-            state = STATE.PAN;
-            const cx = (touches[0].pageX + touches[1].pageX) / 2;
-            const cy = (touches[0].pageY + touches[1].pageY) / 2;
-            panStart.set(cx, cy);
-            lastTouchDistance = getTouchDistance(event);
-          }
-        }
-        function onTouchMove(event) {
-          if (!scope.enabled) return;
-          const touches = event.touches;
-          if (state === STATE.ROTATE && touches.length === 1) {
-            rotateEnd.set(touches[0].pageX, touches[0].pageY);
-            rotateDelta
-              .subVectors(rotateEnd, rotateStart)
-              .multiplyScalar(scope.rotateSpeed / 200);
-            sphericalDelta.theta -= 2 * Math.PI * rotateDelta.x;
-            sphericalDelta.phi -= 2 * Math.PI * rotateDelta.y;
-            rotateStart.copy(rotateEnd);
-          } else if (state === STATE.PAN && touches.length === 2) {
-            const cx = (touches[0].pageX + touches[1].pageX) / 2;
-            const cy = (touches[0].pageY + touches[1].pageY) / 2;
-            panEnd.set(cx, cy);
-            panDelta
-              .subVectors(panEnd, panStart)
-              .multiplyScalar(scope.panSpeed / 100);
-            const dist = getAutoDistance();
-            panOffset.x -= (2 * panDelta.x * dist) / window.innerHeight;
-            panOffset.y += (2 * panDelta.y * dist) / window.innerHeight;
-            panStart.copy(panEnd);
-
-            const newDist = getTouchDistance(event);
-            if (lastTouchDistance !== null) {
-              if (newDist > lastTouchDistance) scale /= 1.03;
-              else if (newDist < lastTouchDistance) scale *= 1.03;
-              zoomChanged = true;
-            }
-            lastTouchDistance = newDist;
-          }
-        }
-        function onTouchEnd() {
-          state = STATE.NONE;
-          lastTouchDistance = null;
-        }
-
-        this.domElement.addEventListener("mousedown", onMouseDown, false);
-        this.domElement.addEventListener("wheel", onMouseWheel, { passive: false });
-        this.domElement.addEventListener("touchstart", onTouchStart, {
-          passive: false,
-        });
-        this.domElement.addEventListener("touchmove", onTouchMove, {
-          passive: false,
-        });
-        this.domElement.addEventListener("touchend", onTouchEnd, false);
-      };
-    })();
-  </script>
 </head>
-
-<body class="min-h-screen flex flex-col">
-
-  <!-- Header -->
-  <header class="border-b border-slate-800 bg-slate-950/90 backdrop-blur">
-    <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
-      <div>
-        <h1 class="text-lg sm:text-xl font-semibold tracking-tight">
-          NMS Base JSON 3D Editor + Galactic Plotter
-        </h1>
-        <p class="text-xs text-slate-400">
-          Load single bases or <code>PersistentPlayerBases.json</code>, nudge objects in 3D, and see bases in the same system via GalacticAddress.
-        </p>
+<body>
+  <div id="app-container">
+    <!-- LEFT PANEL -->
+    <div class="sidebar glass" id="left-panel">
+      <div id="header-block">
+        <div id="header-title">NMS GALACTIC LAB</div>
+        <div id="header-sub">Architect Edition · Single-File Tool</div>
       </div>
-      <div class="flex flex-col items-end gap-1 text-[11px]">
-        <span id="statObjects" class="text-slate-300">Objects: 0</span>
-        <span id="statBounds" class="text-slate-500">Bounds: n/a</span>
-        <span id="statMode" class="text-slate-400">Mode: unknown</span>
+
+      <div id="file-controls">
+        <label class="btn-label" for="fileInput">📂 Load JSON</label>
+        <input type="file" id="fileInput" accept=".json,.txt" />
+        <button id="btnExport" class="btn btn-primary" style="display:none;">💾 Save JSON</button>
+      </div>
+
+      <div id="context-block">
+        <div id="ctx-label-row">
+          <span>CONTEXT (PLAYER)</span>
+          <span id="ctx-status">MISSING</span>
+        </div>
+        <div id="ctx-details">Load BaseContext.json to capture UniverseAddress.</div>
+        <button id="btnInjectContext" class="btn" disabled>⤵ Inject Context to Base</button>
+      </div>
+
+      <div id="base-list-label">BASES</div>
+      <div id="baseList" class="scroll-thin">
+        <div style="font-size:11px;color:#9ca3af;margin-top:4px;">
+          Load a save file containing PersistentPlayerBases to begin.
+        </div>
       </div>
     </div>
-  </header>
 
-  <!-- Main -->
-  <main class="flex-1">
-    <div class="max-w-6xl mx-auto px-3 sm:px-4 py-3 sm:py-4 grid grid-cols-1 lg:grid-cols-2 gap-3 lg:gap-4">
-
-      <!-- Left: JSON / bases -->
-      <section class="bg-slate-950/80 border border-slate-800 rounded-2xl shadow-xl shadow-slate-950/70 flex flex-col overflow-hidden">
-        <div class="px-3 sm:px-4 py-2.5 border-b border-slate-800/80 flex flex-col gap-1">
-          <div class="flex items-center justify-between gap-2">
-            <div>
-              <h2 class="text-sm font-semibold tracking-tight">JSON Source</h2>
-              <p class="text-[11px] text-slate-400">
-                Load <code>volcano 2.json</code>, <code>PersistentPlayerBases.json</code>, or full <code>base context.json</code>.
-              </p>
-            </div>
-          </div>
-
-          <div class="flex flex-wrap gap-2 items-center text-xs pt-2 border-t border-slate-800/70">
-            <label class="cursor-pointer inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-800/70 hover:bg-slate-700/80">
-              <span>Load .json</span>
-              <input id="fileInput" type="file" accept=".json,application/json" class="hidden" />
-            </label>
-
-            <button id="btnPaste" class="px-2.5 py-1 rounded-full bg-slate-800/70 hover:bg-slate-700/80">
-              Paste from clipboard
-            </button>
-
-            <button id="btnFormat" class="px-2.5 py-1 rounded-full bg-emerald-600 hover:bg-emerald-500 font-medium">
-              Validate &amp; Pretty-print
-            </button>
-
-            <button id="btnApply" class="px-2.5 py-1 rounded-full bg-sky-600 hover:bg-sky-500 font-medium">
-              Update 3D from JSON
-            </button>
-
-            <button id="btnCopy" class="ml-auto px-2.5 py-1 rounded-full bg-slate-800/70 hover:bg-slate-700/80">
-              Copy JSON
-            </button>
-            <button id="btnDownload" class="px-2.5 py-1 rounded-full bg-slate-800/70 hover:bg-slate-700/80">
-              Download JSON
-            </button>
-          </div>
-
-          <div class="mt-2 flex flex-col gap-1 text-[11px]">
-            <div class="flex flex-wrap items-center gap-2">
-              <span class="text-slate-400">Detected mode:</span>
-              <span id="modeBadge" class="px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700">
-                unknown
-              </span>
-            </div>
-
-            <!-- Base selector (for PersistentPlayerBases) -->
-            <div id="baseSelectRow" class="hidden flex flex-col gap-1 pt-1">
-              <label class="text-slate-400 flex items-center gap-2">
-                Base:
-                <select id="baseSelect" class="text-[11px] bg-slate-900 border border-slate-700 rounded px-2 py-1 w-full">
-                </select>
-              </label>
-              <p id="baseSelectHint" class="text-[11px] text-slate-500">
-                Chosen base is loaded into 3D. Galactic plotter uses all bases in the same system (same GalacticAddress system key).
-              </p>
-            </div>
-
-            <!-- BaseContext info -->
-            <div id="ctxInfo" class="hidden text-[11px] text-slate-400">
-              Detected <code>BaseContext</code>-style save. This file contains player state and universe address, but not
-              <code>Objects[]</code> for bases. For bases, load <code>PersistentPlayerBases.json</code>.
-            </div>
-          </div>
+    <!-- CENTER PANEL -->
+    <div id="center-panel">
+      <div id="toolbar" class="glass">
+        <div id="toolbar-title">3D COORDINATE LAB</div>
+        <div id="toolbar-controls">
+          <button id="btnFrameAll" class="btn btn-small">Center Base</button>
         </div>
-
-        <!-- Editor -->
-        <div class="flex-1 overflow-hidden">
-          <textarea
-            id="jsonEditor"
-            class="w-full h-full min-h-[260px] max-h-[60vh] p-3 sm:p-4 text-xs leading-5 bg-transparent text-slate-100 outline-none border-0 resize-none scroll-thin"
-            spellcheck="false"
-            placeholder='{
-  "Name": "Volcano",
-  "Objects": [
-    { "Timestamp": 0, "ObjectID": "^FRE_ROOM_FLEET", "Position": [92.149017, 0, 15.244783] }
-  ]
-}
-// Paste a base JSON or a full PersistentPlayerBases.json here or load it as a file.'
-          ></textarea>
-        </div>
-
-        <div class="px-3 sm:px-4 py-2 border-t border-slate-800/80 text-[11px] flex items-center justify-between gap-2">
-          <span id="statusText" class="text-slate-400 truncate">
-            Idle. Load or paste JSON to begin.
-          </span>
-          <span id="statusBadge" class="px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700">
-            ready
-          </span>
-        </div>
-      </section>
-
-      <!-- Right: 3D + galactic plot -->
-      <section class="bg-slate-950/80 border border-slate-800 rounded-2xl shadow-xl shadow-slate-950/70 flex flex-col overflow-hidden">
-        <!-- 3D header -->
-        <div class="px-3 sm:px-4 py-2.5 border-b border-slate-800/80 flex items-center justify-between gap-2">
-          <div>
-            <h2 class="text-sm font-semibold tracking-tight">3D Base View</h2>
-            <p class="text-[11px] text-slate-400">
-              1 finger: rotate · 2 fingers: pan+zoom · tap point to select &amp; nudge.
-            </p>
-          </div>
-          <div class="flex gap-1.5 text-[11px]">
-            <button id="btnFrameAll" class="px-2 py-1 rounded-full bg-slate-800/70 hover:bg-slate-700/80">
-              Frame All
-            </button>
-            <button id="btnResetCamera" class="px-2 py-1 rounded-full bg-slate-800/70 hover:bg-slate-700/80">
-              Reset Camera
-            </button>
-          </div>
-        </div>
-
-        <!-- 3D canvas -->
-        <div class="flex-1 relative min-h-[260px]">
-          <canvas id="threeCanvas"></canvas>
-          <div class="absolute bottom-2 left-2 px-2 py-1 rounded bg-slate-900/80 text-[10px] text-slate-200 border border-slate-600">
-            Axes: X(red) Y(green) Z(blue) · grid at Y=0 · yellow cube at origin.
-          </div>
-        </div>
-
-        <!-- Selection / move inspector -->
-        <div class="border-t border-slate-800/80 px-3 sm:px-4 py-2.5 text-[11px] space-y-2">
-          <div id="selectionLabel" class="text-slate-300">
-            No object selected. Tap a point to select.
-          </div>
-
-          <div class="flex flex-wrap items-center gap-2">
-            <label class="flex items-center gap-1">
-              <span class="text-slate-400">Step</span>
-              <input
-                id="moveStep"
-                type="number"
-                value="1"
-                step="0.1"
-                class="w-16 px-2 py-1 rounded bg-slate-900 border border-slate-700 text-[11px]"
-              />
-            </label>
-
-            <div class="flex flex-wrap gap-1">
-              <span class="text-slate-400 mr-1">X</span>
-              <button id="btnXminus" class="px-2 py-0.5 rounded bg-slate-800/80 hover:bg-slate-700/90">-</button>
-              <button id="btnXplus" class="px-2 py-0.5 rounded bg-slate-800/80 hover:bg-slate-700/90">+</button>
-
-              <span class="text-slate-400 ml-2 mr-1">Y</span>
-              <button id="btnYminus" class="px-2 py-0.5 rounded bg-slate-800/80 hover:bg-slate-700/90">-</button>
-              <button id="btnYplus" class="px-2 py-0.5 rounded bg-slate-800/80 hover:bg-slate-700/90">+</button>
-
-              <span class="text-slate-400 ml-2 mr-1">Z</span>
-              <button id="btnZminus" class="px-2 py-0.5 rounded bg-slate-800/80 hover:bg-slate-700/90">-</button>
-              <button id="btnZplus" class="px-2 py-0.5 rounded bg-slate-800/80 hover:bg-slate-700/90">+</button>
-            </div>
-          </div>
-
-          <div class="grid grid-cols-3 gap-2">
-            <label class="flex flex-col gap-0.5">
-              <span class="text-slate-400">X</span>
-              <input
-                id="posX"
-                type="number"
-                step="0.1"
-                class="w-full px-2 py-1 rounded bg-slate-900 border border-slate-700 text-[11px]"
-              />
-            </label>
-            <label class="flex flex-col gap-0.5">
-              <span class="text-slate-400">Y</span>
-              <input
-                id="posY"
-                type="number"
-                step="0.1"
-                class="w-full px-2 py-1 rounded bg-slate-900 border border-slate-700 text-[11px]"
-              />
-            </label>
-            <label class="flex flex-col gap-0.5">
-              <span class="text-slate-400">Z</span>
-              <input
-                id="posZ"
-                type="number"
-                step="0.1"
-                class="w-full px-2 py-1 rounded bg-slate-900 border border-slate-700 text-[11px]"
-              />
-            </label>
-          </div>
-
-          <div class="flex flex-wrap gap-2">
-            <button id="btnApplyPos" class="px-3 py-1 rounded-full bg-emerald-600 hover:bg-emerald-500">
-              Apply XYZ to selected object
-            </button>
-            <button id="btnSyncJson" class="px-3 py-1 rounded-full bg-slate-800/80 hover:bg-slate-700/90">
-              Re-pretty-print JSON from edits
-            </button>
-          </div>
-        </div>
-
-        <!-- Galactic plotter -->
-        <div class="border-t border-slate-800/80 px-3 sm:px-4 py-2.5 text-[11px] space-y-2 bg-slate-950/90">
-          <div class="flex items-center justify-between gap-2">
-            <div>
-              <h2 class="text-sm font-semibold tracking-tight">Galactic Address Plotter</h2>
-              <p class="text-[11px] text-slate-400">
-                Uses <code>GalacticAddress</code> from <code>PersistentPlayerBases.json</code>. Assumes last 4 bits = planet index.
-              </p>
-            </div>
-            <div id="addrSummary" class="text-right text-[11px] text-slate-300"></div>
-          </div>
-
-          <canvas id="galacticCanvas" width="640" height="220"></canvas>
-
-          <div id="galacticInfo" class="text-[11px] text-slate-300 max-h-40 overflow-auto scroll-thin"></div>
-        </div>
-      </section>
+      </div>
+      <div id="canvas-area" class="glass">
+        <div id="canvas-container"></div>
+      </div>
     </div>
-  </main>
 
-  <script>
-    // ---------- DOM helpers ----------
-    const $ = (id) => document.getElementById(id);
+    <!-- RIGHT PANEL -->
+    <div class="sidebar glass" id="right-panel">
+      <div id="selection-block">
+        <div id="selection-title">OBJECT EDITOR</div>
 
-    const editor = $("jsonEditor");
-    const fileInput = $("fileInput");
-    const btnPaste = $("btnPaste");
-    const btnFormat = $("btnFormat");
-    const btnApply = $("btnApply");
-    const btnCopy = $("btnCopy");
-    const btnDownload = $("btnDownload");
-    const statusText = $("statusText");
-    const statusBadge = $("statusBadge");
-    const statObjects = $("statObjects");
-    const statBounds = $("statBounds");
-    const statMode = $("statMode");
-    const modeBadge = $("modeBadge");
-    const baseSelectRow = $("baseSelectRow");
-    const baseSelect = $("baseSelect");
-    const ctxInfo = $("ctxInfo");
+        <div id="selection-info" style="display:none;">
+          <div class="field-group">
+            <div class="field-label">Object ID</div>
+            <input id="inpObjId" class="mono-input" type="text" readonly />
+          </div>
 
-    const btnFrameAll = $("btnFrameAll");
-    const btnResetCam = $("btnResetCamera");
-    const canvas3D = $("threeCanvas");
-    const selectionLabel = $("selectionLabel");
-    const moveStepInput = $("moveStep");
-    const posXInput = $("posX");
-    const posYInput = $("posY");
-    const posZInput = $("posZ");
-    const btnXminus = $("btnXminus");
-    const btnXplus = $("btnXplus");
-    const btnYminus = $("btnYminus");
-    const btnYplus = $("btnYplus");
-    const btnZminus = $("btnZminus");
-    const btnZplus = $("btnZplus");
-    const btnApplyPos = $("btnApplyPos");
-    const btnSyncJson = $("btnSyncJson");
+          <div class="field-group">
+            <div class="field-label">Local Position (Base Space)</div>
+            <div id="xyz-grid">
+              <div class="axis-label x">X</div>
+              <input id="inpX" class="mono-input" type="number" step="any" />
+              <button class="btn btn-small btn-nudge" data-axis="x" data-val="1">+1</button>
+              <button class="btn btn-small btn-nudge" data-axis="x" data-val="-1">-1</button>
 
-    const galacticCanvas = $("galacticCanvas");
-    const galacticInfoEl = $("galacticInfo");
-    const addrSummaryEl = $("addrSummary");
+              <div class="axis-label y">Y</div>
+              <input id="inpY" class="mono-input" type="number" step="any" />
+              <button class="btn btn-small btn-nudge" data-axis="y" data-val="1">+1</button>
+              <button class="btn btn-small btn-nudge" data-axis="y" data-val="-1">-1</button>
 
-    // ---------- Status helpers ----------
-    function setStatus(msg, type = "info") {
-      statusText.textContent = msg;
-      statusBadge.className =
-        "px-2 py-0.5 rounded-full text-[11px] border";
+              <div class="axis-label z">Z</div>
+              <input id="inpZ" class="mono-input" type="number" step="any" />
+              <button class="btn btn-small btn-nudge" data-axis="z" data-val="1">+1</button>
+              <button class="btn btn-small btn-nudge" data-axis="z" data-val="-1">-1</button>
+            </div>
+          </div>
 
-      if (type === "ok") {
-        statusBadge.textContent = "ok";
-        statusBadge.classList.add(
-          "bg-emerald-900/40",
-          "text-emerald-300",
-          "border-emerald-700/80"
-        );
-      } else if (type === "error") {
-        statusBadge.textContent = "error";
-        statusBadge.classList.add(
-          "bg-rose-900/40",
-          "text-rose-300",
-          "border-rose-700/80"
-        );
-      } else {
-        statusBadge.textContent = "info";
-        statusBadge.classList.add(
-          "bg-slate-800",
-          "text-slate-300",
-          "border-slate-700"
-        );
+          <button id="btnApply" class="btn btn-small" style="width:100%;margin-top:4px;">Apply XYZ to Part</button>
+
+          <div id="storage-box">
+            <div id="storage-label">STORAGE FORMAT</div>
+            <div id="storage-format">Unknown</div>
+          </div>
+        </div>
+
+        <div id="no-selection">
+          No part selected.<br/>
+          <span style="font-size:10px;">Click a cube in the 3D view to edit.</span>
+        </div>
+      </div>
+
+      <div id="offset-block">
+        <div id="offset-title">GLOBAL BASE OFFSET</div>
+        <div id="offset-desc">
+          Offsets <b>all parts</b> of the active base in local space.<br/>
+          Does <b>not</b> move planets or stations.
+        </div>
+        <div id="offset-grid">
+          <input id="offX" class="mono-input" type="number" step="any" placeholder="ΔX" />
+          <input id="offY" class="mono-input" type="number" step="any" placeholder="ΔY" />
+          <input id="offZ" class="mono-input" type="number" step="any" placeholder="ΔZ" />
+        </div>
+        <button id="btnOffsetBase" class="btn">Apply Offset to Entire Base</button>
+      </div>
+
+      <div id="debug-block">
+        <div id="debug-title">ADDRESS DECODER (EXPERIMENTAL)</div>
+        <div class="debug-row">
+          <span class="debug-label">HEX</span>
+          <span id="dbg-hex" class="debug-value">-</span>
+        </div>
+        <div class="debug-row">
+          <span class="debug-label">SYS</span>
+          <span id="dbg-sys" class="debug-value">-</span>
+        </div>
+        <div class="debug-row">
+          <span class="debug-label">PLT</span>
+          <span id="dbg-plt" class="debug-value">-</span>
+        </div>
+        <div class="debug-row">
+          <span class="debug-label">VOX</span>
+          <span id="dbg-vox" class="debug-value">-</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+/* ================================================================
+   NMS GALACTIC LAB – MINIMAL EDITION
+   - Multi-file aware: BaseContext + PersistentPlayerBases
+   - Decimal-safe GalacticAddress handling
+   - 3D object editor + global base offset
+   - Explicitly experimental galactic unpacking
+   ================================================================ */
+
+const state = {
+  rawJson: null,
+  filename: "nms_save.json",
+  rootType: null, // 'wrapper', 'baseList', 'singleBase'
+
+  bases: [],
+  activeBaseIndex: -1,
+
+  context: {
+    available: false,
+    hexAddress: null,
+    decAddress: null,
+    sourceName: null
+  },
+
+  scene: null,
+  camera: null,
+  renderer: null,
+  raycaster: new THREE.Raycaster(),
+  pointer: new THREE.Vector2(),
+  meshes: [],
+  selectedMesh: null,
+
+  helpers: {
+    matNormal: new THREE.MeshLambertMaterial({ color: 0xaaaaaa }),
+    matSelected: new THREE.MeshLambertMaterial({ color: 0xff00ff, emissive: 0x330033 }),
+    geomBox: new THREE.BoxGeometry(1, 1, 1)
+  },
+
+  controls: {
+    frameCurrentBase: () => {}
+  }
+};
+
+/* ---------------- ADDRESS CODEC ---------------- */
+
+const AddressCodec = {
+  toHexFromAny(addr) {
+    if (addr == null) return "0x0";
+
+    if (typeof addr === "object") {
+      if ("VoxelX" in addr || "VoxelY" in addr || "VoxelZ" in addr) {
+        return AddressCodec.packVoxel(addr);
       }
+      return "0x0";
     }
 
-    function setMode(mode) {
-      statMode.textContent = "Mode: " + mode;
-      modeBadge.textContent = mode;
-      modeBadge.className =
-        "px-2 py-0.5 rounded-full text-[11px] border " +
-        (mode === "basesList"
-          ? "bg-sky-900/40 text-sky-300 border-sky-700/80"
-          : mode === "singleBase"
-          ? "bg-emerald-900/40 text-emerald-300 border-emerald-700/80"
-          : mode === "baseContext"
-          ? "bg-indigo-900/40 text-indigo-300 border-indigo-700/80"
-          : "bg-slate-800 text-slate-300 border-slate-700");
-    }
-
-    function downloadBlob(content, filename, mime = "application/json") {
-      const blob = new Blob([content], { type: mime });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    }
-
-    async function copyToClipboard(text) {
-      if (!navigator.clipboard) {
-        throw new Error("Clipboard API not available.");
-      }
-      await navigator.clipboard.writeText(text);
-    }
-
-    // ---------- NMS hex helpers ----------
-    function sanitizeNms(text) {
-      // Convert NMS-style \xHH into JSON-valid \u00HH
-      return text.replace(/\\x([0-9A-Fa-f]{2})/g, "\\u00$1");
-    }
-    function unsanitizeNms(text) {
-      // Convert back to \xHH when exporting if needed
-      return text.replace(/\\u00([0-9A-Fa-f]{2})/g, "\\x$1");
-    }
-    function parseNmsJson(rawText) {
-      const patched = sanitizeNms(rawText);
-      return JSON.parse(patched);
-    }
-
-    // ---------- Global JSON state ----------
-    let currentRoot = null;      // whatever editor currently holds, parsed
-    let currentMode = "unknown"; // "singleBase", "basesList", "baseContext", "unknown"
-    let basesList = null;        // for PersistentPlayerBases.json
-    let selectedBaseIndex = -1;  // index into basesList
-
-    // For 3D: root that owns Objects[]
-    let currentBaseRoot = null;
-    let currentObjects = null;
-    let lastPoints = null;
-    let lastBounds = null;
-
-    // For galactic plotting (basesList only)
-    let systemBasesCache = null;
-
-    function detectJsonMode(root) {
-      if (!root) return "unknown";
-      if (Array.isArray(root) && root.length > 0 && typeof root[0] === "object") {
-        // PersistentPlayerBases: each entry has GalacticAddress + Objects
-        if ("GalacticAddress" in root[0] && "Objects" in root[0]) {
-          return "basesList";
-        }
-      }
-      if (root.Objects || root.objects) {
-        // single base JSON
-        return "singleBase";
-      }
-      if (root.PlayerStateData && root.PlayerStateData.UniverseAddress) {
-        // BaseContext-style
-        return "baseContext";
-      }
-      return "unknown";
-    }
-
-    function loadRootFromEditor() {
-      const raw = editor.value.trim();
-      if (!raw) {
-        setStatus("Editor is empty.", "error");
-        return;
-      }
+    if (typeof addr === "number") {
       try {
-        const parsed = parseNmsJson(raw);
-        currentRoot = parsed;
-        currentMode = detectJsonMode(parsed);
-        setMode(currentMode);
-        configureForMode(parsed, currentMode);
-        setStatus("JSON parsed and mode detected: " + currentMode, "ok");
-      } catch (e) {
-        console.error(e);
-        setStatus("JSON parse error: " + e.message, "error");
-      }
-    }
-
-    function configureForMode(root, mode) {
-      basesList = null;
-      selectedBaseIndex = -1;
-      currentBaseRoot = null;
-      currentObjects = null;
-      lastPoints = null;
-      lastBounds = null;
-      systemBasesCache = null;
-      addrSummaryEl.textContent = "";
-      galacticInfoEl.textContent = "";
-      clearGalacticCanvas();
-
-      baseSelectRow.classList.add("hidden");
-      ctxInfo.classList.add("hidden");
-
-      if (mode === "basesList") {
-        basesList = root;
-        buildBaseSelect(basesList);
-        if (basesList.length > 0) {
-          baseSelectRow.classList.remove("hidden");
-          onBaseSelectionChanged();
-        }
-      } else if (mode === "singleBase") {
-        currentBaseRoot = root;
-        try {
-          const { points, bounds } = buildPointsFromRoot(currentBaseRoot);
-          updatePointCloud(points, bounds);
-          setStatus(
-            `Loaded ${points.length} objects from SingleBase into 3D.`,
-            "ok"
-          );
-          // No galactic plot here (no GalacticAddress in this JSON).
-          galacticInfoEl.textContent =
-            "Galactic plot: this file has no GalacticAddress. Load PersistentPlayerBases.json to see bases in a system.";
-        } catch (e) {
-          console.error(e);
-          setStatus("Parse/mapping error: " + e.message, "error");
-        }
-      } else if (mode === "baseContext") {
-        ctxInfo.classList.remove("hidden");
-        // Show UniverseAddress summary in galactic info box
-        try {
-          const ua =
-            root.PlayerStateData &&
-            root.PlayerStateData.UniverseAddress &&
-            root.PlayerStateData.UniverseAddress.GalacticAddress;
-          if (ua) {
-            galacticInfoEl.textContent =
-              "BaseContext UniverseAddress:\n" +
-              JSON.stringify(ua, null, 2);
-            addrSummaryEl.textContent =
-              `VoxelX=${ua.VoxelX}, VoxelY=${ua.VoxelY}, VoxelZ=${ua.VoxelZ}, SolarSystemIndex=${ua.SolarSystemIndex}, PlanetIndex=${ua.PlanetIndex}`;
-          } else {
-            galacticInfoEl.textContent =
-              "BaseContext: UniverseAddress not found in PlayerStateData.";
-          }
-        } catch {
-          galacticInfoEl.textContent =
-            "BaseContext detected but UniverseAddress could not be read cleanly.";
-        }
-        clear3D();
-      } else {
-        // unknown
-        galacticInfoEl.textContent =
-          "Unknown JSON shape. 3D expects either:\n" +
-          "- Single base JSON with root.Objects[]\n" +
-          "- PersistentPlayerBases.json (list of bases with Objects[])\n" +
-          "- base context.json (BaseContext / PlayerStateData)";
-        clear3D();
-      }
-    }
-
-    function buildBaseSelect(list) {
-      baseSelect.innerHTML = "";
-      list.forEach((b, idx) => {
-        const opt = document.createElement("option");
-        const name = b.Name || `Base #${idx}`;
-        const addr = String(b.GalacticAddress ?? "n/a");
-        opt.value = String(idx);
-        opt.textContent = `${idx.toString().padStart(3, "0")} · ${name} · ${addr}`;
-        baseSelect.appendChild(opt);
-      });
-      if (list.length > 0) baseSelect.value = "0";
-    }
-
-    function onBaseSelectionChanged() {
-      if (!basesList || basesList.length === 0) return;
-      const idx = parseInt(baseSelect.value, 10);
-      if (Number.isNaN(idx) || !basesList[idx]) return;
-      selectedBaseIndex = idx;
-      const base = basesList[idx];
-
-      currentBaseRoot = base;
-      try {
-        const { points, bounds } = buildPointsFromRoot(base);
-        updatePointCloud(points, bounds);
-        setStatus(
-          `Loaded base #${idx} "${base.Name || ""}" into 3D (${points.length} objects).`,
-          "ok"
-        );
-      } catch (e) {
-        console.error(e);
-        setStatus("Base parse/mapping error: " + e.message, "error");
-      }
-
-      updateGalacticPlotForBase(base, basesList);
-    }
-
-    // ---------- JSON → points (base objects) ----------
-    function buildPointsFromRoot(root) {
-      if (!root || typeof root !== "object") {
-        throw new Error("Root JSON is not an object.");
-      }
-      const objects = Array.isArray(root.Objects)
-        ? root.Objects
-        : Array.isArray(root.objects)
-        ? root.objects
-        : null;
-      if (!objects) {
-        throw new Error("Expected root.Objects[] array (NMS base).");
-      }
-
-      const points = [];
-      let minX = Infinity,
-        minY = Infinity,
-        minZ = Infinity;
-      let maxX = -Infinity,
-        maxY = -Infinity,
-        maxZ = -Infinity;
-
-      for (const obj of objects) {
-        if (!obj || typeof obj !== "object") continue;
-        const pos = obj.Position;
-        if (!Array.isArray(pos) || pos.length < 3) continue;
-        const x = Number(pos[0]) || 0;
-        const y = Number(pos[1]) || 0;
-        const z = Number(pos[2]) || 0;
-        const id = String(obj.ObjectID || "UNKNOWN");
-        points.push({ x, y, z, id });
-
-        if (x < minX) minX = x;
-        if (y < minY) minY = y;
-        if (z < minZ) minZ = z;
-        if (x > maxX) maxX = x;
-        if (y > maxY) maxY = y;
-        if (z > maxZ) maxZ = z;
-      }
-
-      if (!points.length) {
-        throw new Error(
-          "No Objects with Position [x,y,z] found in Objects[]."
-        );
-      }
-
-      currentObjects = objects;
-      lastPoints = points;
-      lastBounds = { minX, minY, minZ, maxX, maxY, maxZ };
-
-      return { points, bounds: lastBounds };
-    }
-
-    function boundsToString(b) {
-      if (!b) return "Bounds: n/a";
-      const sx = `${b.minX.toFixed(1)} → ${b.maxX.toFixed(1)}`;
-      const sy = `${b.minY.toFixed(1)} → ${b.maxY.toFixed(1)}`;
-      const sz = `${b.minZ.toFixed(1)} → ${b.maxZ.toFixed(1)}`;
-      return `X: ${sx}, Y: ${sy}, Z: ${sz}`;
-    }
-
-    // ---------- Three.js 3D ------
-    let renderer, scene, camera, controls;
-    let pointsMesh = null;
-    let selectedIndex = null;
-    let selectedMarker = null;
-    let currentBounds = null;
-    let initialCamPosition = null;
-    const raycaster = new THREE.Raycaster();
-    const pointer = new THREE.Vector2();
-
-    function getCanvasSize() {
-      const rect = canvas3D.getBoundingClientRect();
-      let w = rect.width;
-      let h = rect.height;
-      if (!w || !h) {
-        w = window.innerWidth * 0.5;
-        h = window.innerHeight * 0.5;
-      }
-      return { w, h };
-    }
-
-    function initThree() {
-      try {
-        scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x020617);
-
-        const { w, h } = getCanvasSize();
-        camera = new THREE.PerspectiveCamera(60, w / h, 0.1, 50000);
-        camera.position.set(150, 120, 150);
-        initialCamPosition = camera.position.clone();
-
-        renderer = new THREE.WebGLRenderer({
-          canvas: canvas3D,
-          antialias: true,
-        });
-        renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-        renderer.setSize(w, h, false);
-
-        controls = new THREE.OrbitControls(camera, renderer.domElement);
-        controls.enableDamping = true;
-        controls.dampingFactor = 0.08;
-        controls.enablePan = true;
-
-        const axes = new THREE.AxesHelper(80);
-        axes.material.depthTest = false;
-        axes.renderOrder = 2;
-        scene.add(axes);
-
-        const grid = new THREE.GridHelper(600, 60, 0x93c5fd, 0x1d4ed8);
-        grid.position.y = 0;
-        grid.material.opacity = 0.6;
-        grid.material.transparent = true;
-        grid.renderOrder = 1;
-        scene.add(grid);
-
-        const cubeGeom = new THREE.BoxGeometry(10, 10, 10);
-        const cubeMat = new THREE.MeshStandardMaterial({
-          color: 0xfacc15,
-          emissive: 0xfacc15,
-          emissiveIntensity: 0.3,
-        });
-        const cube = new THREE.Mesh(cubeGeom, cubeMat);
-        scene.add(cube);
-
-        const hemi = new THREE.HemisphereLight(0xffffff, 0x111827, 1.1);
-        scene.add(hemi);
-
-        window.addEventListener("resize", onWindowResize);
-        renderer.domElement.addEventListener("pointerdown", onPointerDown);
-
-        animate();
-      } catch (e) {
-        console.error("WebGL init failed:", e);
-        setStatus("WebGL / Three.js not available in this context.", "error");
-      }
-    }
-
-    function onWindowResize() {
-      if (!renderer || !camera) return;
-      const { w, h } = getCanvasSize();
-      camera.aspect = w / h;
-      camera.updateProjectionMatrix();
-      renderer.setSize(w, h, false);
-    }
-
-    function animate() {
-      requestAnimationFrame(animate);
-      if (controls) controls.update();
-      if (renderer && scene && camera) {
-        renderer.render(scene, camera);
-      }
-    }
-
-    function hashColorFromString(str) {
-      let hash = 0;
-      for (let i = 0; i < str.length; i++) {
-        hash = (hash * 31 + str.charCodeAt(i)) >>> 0;
-      }
-      const r = (hash & 0xff0000) >> 16;
-      const g = (hash & 0x00ff00) >> 8;
-      const b = hash & 0x0000ff;
-      return new THREE.Color(r / 255, g / 255, b / 255);
-    }
-
-    function clear3D() {
-      if (!scene) return;
-      if (pointsMesh) {
-        scene.remove(pointsMesh);
-        pointsMesh.geometry.dispose();
-        pointsMesh.material.dispose();
-        pointsMesh = null;
-      }
-      if (selectedMarker) {
-        scene.remove(selectedMarker);
-        selectedMarker.geometry.dispose();
-        selectedMarker.material.dispose();
-        selectedMarker = null;
-      }
-      selectedIndex = null;
-      selectionLabel.textContent =
-        "No object selected. Tap a point to select.";
-      statObjects.textContent = "Objects: 0";
-      statBounds.textContent = "Bounds: n/a";
-    }
-
-    function updatePointCloud(points, bounds) {
-      if (!scene) return;
-      clear3D();
-
-      const count = points.length;
-      const positions = new Float32Array(count * 3);
-      const colors = new Float32Array(count * 3);
-
-      for (let i = 0; i < count; i++) {
-        const p = points[i];
-        const idx = i * 3;
-        positions[idx] = p.x;
-        positions[idx + 1] = p.y;
-        positions[idx + 2] = p.z;
-        const col = hashColorFromString(p.id);
-        colors[idx] = col.r;
-        colors[idx + 1] = col.g;
-        colors[idx + 2] = col.b;
-      }
-
-      const geom = new THREE.BufferGeometry();
-      geom.setAttribute("position", new THREE.BufferAttribute(positions, 3));
-      geom.setAttribute("color", new THREE.BufferAttribute(colors, 3));
-
-      const size = Math.max(1.2, Math.min(5, Math.cbrt(count)));
-      const mat = new THREE.PointsMaterial({
-        size,
-        sizeAttenuation: true,
-        vertexColors: true,
-      });
-      pointsMesh = new THREE.Points(geom, mat);
-      scene.add(pointsMesh);
-
-      currentBounds = bounds;
-      statObjects.textContent = `Objects: ${count}`;
-      statBounds.textContent = boundsToString(bounds);
-
-      frameAll();
-    }
-
-    function frameAll() {
-      if (!currentBounds || !camera || !controls) return;
-      const b = currentBounds;
-      const cx = (b.minX + b.maxX) * 0.5;
-      const cy = (b.minY + b.maxY) * 0.5;
-      const cz = (b.minZ + b.maxZ) * 0.5;
-
-      const sx = b.maxX - b.minX;
-      const sy = b.maxY - b.minY;
-      const sz = b.maxZ - b.minZ;
-      const maxSize = Math.max(sx, sy, sz, 10);
-
-      const dist = maxSize * 1.8;
-      camera.position.set(cx + dist, cy + dist, cz + dist);
-      camera.lookAt(cx, cy, cz);
-      controls.target.set(cx, cy, cz);
-      controls.update();
-    }
-
-    function resetCamera() {
-      if (!camera || !controls || !initialCamPosition) return;
-      camera.position.copy(initialCamPosition);
-      controls.target.set(0, 0, 0);
-      controls.update();
-    }
-
-    function onPointerDown(event) {
-      if (!pointsMesh || !camera || !renderer) return;
-      const rect = renderer.domElement.getBoundingClientRect();
-      const x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-      const y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
-      pointer.set(x, y);
-      raycaster.setFromCamera(pointer, camera);
-      const intersects = raycaster.intersectObject(pointsMesh);
-      if (intersects.length > 0) {
-        const idx = intersects[0].index;
-        selectPoint(idx);
-      }
-    }
-
-    function selectPoint(index) {
-      if (!pointsMesh || !currentObjects || !currentObjects[index]) return;
-      selectedIndex = index;
-
-      const posAttr = pointsMesh.geometry.attributes.position;
-      const x = posAttr.getX(index);
-      const y = posAttr.getY(index);
-      const z = posAttr.getZ(index);
-
-      posXInput.value = x.toFixed(3);
-      posYInput.value = y.toFixed(3);
-      posZInput.value = z.toFixed(3);
-
-      const obj = currentObjects[index];
-      const id = obj && obj.ObjectID ? obj.ObjectID : "UNKNOWN";
-      selectionLabel.textContent = `Selected #${index} · ObjectID: ${id} · XYZ = (${x.toFixed(
-        3
-      )}, ${y.toFixed(3)}, ${z.toFixed(3)})`;
-
-      if (!selectedMarker) {
-        const g = new THREE.SphereGeometry(4, 16, 16);
-        const m = new THREE.MeshBasicMaterial({ color: 0xfff000 });
-        selectedMarker = new THREE.Mesh(g, m);
-        scene.add(selectedMarker);
-      }
-      selectedMarker.position.set(x, y, z);
-    }
-
-    function getStep() {
-      const v = parseFloat(moveStepInput.value);
-      return Number.isNaN(v) || !Number.isFinite(v) ? 1 : v;
-    }
-
-    function nudgeSelected(axis, delta) {
-      if (selectedIndex == null || !pointsMesh || !currentObjects) return;
-      const posAttr = pointsMesh.geometry.attributes.position;
-
-      let x = posAttr.getX(selectedIndex);
-      let y = posAttr.getY(selectedIndex);
-      let z = posAttr.getZ(selectedIndex);
-
-      if (axis === "x") x += delta;
-      else if (axis === "y") y += delta;
-      else if (axis === "z") z += delta;
-
-      posAttr.setXYZ(selectedIndex, x, y, z);
-      posAttr.needsUpdate = true;
-
-      const obj = currentObjects[selectedIndex];
-      if (Array.isArray(obj.Position)) {
-        obj.Position[0] = x;
-        obj.Position[1] = y;
-        obj.Position[2] = z;
-      }
-
-      if (selectedMarker) selectedMarker.position.set(x, y, z);
-
-      posXInput.value = x.toFixed(3);
-      posYInput.value = y.toFixed(3);
-      posZInput.value = z.toFixed(3);
-
-      selectionLabel.textContent = `Selected #${selectedIndex} · ObjectID: ${
-        obj.ObjectID || "UNKNOWN"
-      } · XYZ = (${x.toFixed(3)}, ${y.toFixed(3)}, ${z.toFixed(3)})`;
-      setStatus(`Moved object #${selectedIndex} ${axis} by ${delta}`, "ok");
-    }
-
-    function applyPosFromInputs() {
-      if (selectedIndex == null || !pointsMesh || !currentObjects) return;
-      const posAttr = pointsMesh.geometry.attributes.position;
-      const x = parseFloat(posXInput.value);
-      const y = parseFloat(posYInput.value);
-      const z = parseFloat(posZInput.value);
-      if ([x, y, z].some((v) => Number.isNaN(v))) {
-        setStatus("Invalid XYZ values.", "error");
-        return;
-      }
-
-      posAttr.setXYZ(selectedIndex, x, y, z);
-      posAttr.needsUpdate = true;
-
-      const obj = currentObjects[selectedIndex];
-      if (Array.isArray(obj.Position)) {
-        obj.Position[0] = x;
-        obj.Position[1] = y;
-        obj.Position[2] = z;
-      }
-
-      if (selectedMarker) selectedMarker.position.set(x, y, z);
-
-      selectionLabel.textContent = `Selected #${selectedIndex} · ObjectID: ${
-        obj.ObjectID || "UNKNOWN"
-      } · XYZ = (${x.toFixed(3)}, ${y.toFixed(3)}, ${z.toFixed(3)})`;
-      setStatus("Updated object position from XYZ inputs.", "ok");
-    }
-
-    function syncJsonFromState() {
-      if (!currentRoot) {
-        setStatus("Nothing loaded yet.", "error");
-        return;
-      }
-      try {
-        const text = JSON.stringify(currentRoot, null, 2);
-        editor.value = text;
-        setStatus("JSON re-pretty-printed from in-memory state.", "ok");
-      } catch (e) {
-        console.error(e);
-        setStatus("JSON stringify error: " + e.message, "error");
-      }
-    }
-
-    // ---------- Galactic Address plotter ----------
-    function clearGalacticCanvas() {
-      const ctx = galacticCanvas.getContext("2d");
-      ctx.fillStyle = "#020617";
-      ctx.fillRect(0, 0, galacticCanvas.width, galacticCanvas.height);
-    }
-
-    function parseGalacticAddress(addr) {
-      if (addr === null || addr === undefined) return null;
-      const s = String(addr);
-      let value;
-      try {
-        if (s.startsWith("0x") || s.startsWith("0X")) value = BigInt(s);
-        else value = BigInt(s);
+        return "0x" + BigInt(addr).toString(16).toUpperCase();
       } catch {
-        return null;
+        return "0x0";
       }
-      const planetIndex = Number(value & 0xfn); // last 4 bits
-      const systemKey = value >> 4n; // assumed: system portion
-      return { raw: s, value, planetIndex, systemKey };
     }
 
-    function updateGalacticPlotForBase(base, allBases) {
-      clearGalacticCanvas();
-      galacticInfoEl.textContent = "";
+    if (typeof addr === "string") {
+      const trimmed = addr.trim();
+      if (!trimmed) return "0x0";
 
-      const addrMeta = parseGalacticAddress(base.GalacticAddress);
-      if (!addrMeta) {
-        galacticInfoEl.textContent =
-          "Selected base has no parsable GalacticAddress. Galactic plot disabled.";
-        addrSummaryEl.textContent = "";
-        return;
+      if (trimmed.startsWith("0x") || /[a-fA-F]/.test(trimmed)) {
+        return trimmed.startsWith("0x")
+          ? trimmed.toUpperCase()
+          : "0x" + trimmed.toUpperCase();
       }
 
-      addrSummaryEl.textContent =
-        `Address: ${addrMeta.raw} · PlanetIndex≈${addrMeta.planetIndex} · SystemKey=${addrMeta.systemKey.toString(16)}`;
-
-      // Collect bases in same system (same systemKey assumption).
-      const sameSystem = [];
-      for (const b of allBases) {
-        const m = parseGalacticAddress(b.GalacticAddress);
-        if (!m) continue;
-        if (m.systemKey === addrMeta.systemKey) {
-          const pos = Array.isArray(b.Position) ? b.Position : [0, 0, 0];
-          sameSystem.push({
-            base: b,
-            meta: m,
-            pos: { x: +pos[0] || 0, y: +pos[1] || 0, z: +pos[2] || 0 },
-          });
-        }
+      try {
+        const val = BigInt(trimmed);
+        return "0x" + val.toString(16).toUpperCase();
+      } catch {
+        return "0x0";
       }
-
-      if (sameSystem.length === 0) {
-        galacticInfoEl.textContent =
-          "No other bases found for this system key. Only this base appears in your PersistentPlayerBases.json with that address.";
-        return;
-      }
-
-      // Compute positions relative to selected base origin in world space.
-      const selPos = Array.isArray(base.Position)
-        ? { x: +base.Position[0] || 0, y: +base.Position[1] || 0, z: +base.Position[2] || 0 }
-        : { x: 0, y: 0, z: 0 };
-
-      const relBases = sameSystem.map((entry) => {
-        const dx = entry.pos.x - selPos.x;
-        const dy = entry.pos.y - selPos.y;
-        const dz = entry.pos.z - selPos.z;
-        const dist3d = Math.sqrt(dx * dx + dy * dy + dz * dz);
-        const dist2d = Math.sqrt(dx * dx + dz * dz);
-        return {
-          ...entry,
-          rel: { x: dx, y: dy, z: dz },
-          dist3d,
-          dist2d,
-        };
-      });
-
-      // Draw 2D XZ map with selected base at center.
-      const ctx = galacticCanvas.getContext("2d");
-      const w = galacticCanvas.width;
-      const h = galacticCanvas.height;
-      ctx.clearRect(0, 0, w, h);
-
-      ctx.fillStyle = "#020617";
-      ctx.fillRect(0, 0, w, h);
-
-      const margin = 20;
-      let maxAbs = 1;
-      for (const r of relBases) {
-        const d = Math.hypot(r.rel.x, r.rel.z);
-        if (d > maxAbs) maxAbs = d;
-      }
-      const scale =
-        (Math.min(w, h) / 2 - margin) / (maxAbs === 0 ? 1 : maxAbs);
-
-      const cx = w / 2;
-      const cy = h / 2;
-
-      // grid circles
-      ctx.strokeStyle = "#1f2933";
-      ctx.lineWidth = 1;
-      const rings = 3;
-      for (let i = 1; i <= rings; i++) {
-        const r = (maxAbs / rings) * i * scale;
-        ctx.beginPath();
-        ctx.arc(cx, cy, r, 0, Math.PI * 2);
-        ctx.stroke();
-      }
-      // axes
-      ctx.strokeStyle = "#334155";
-      ctx.beginPath();
-      ctx.moveTo(0, cy);
-      ctx.lineTo(w, cy);
-      ctx.moveTo(cx, 0);
-      ctx.lineTo(cx, h);
-      ctx.stroke();
-
-      // draw bases
-      for (const entry of relBases) {
-        const isSelected = entry.base === base;
-        const x = cx + entry.rel.x * scale;
-        const y = cy - entry.rel.z * scale; // z forward → up
-
-        ctx.beginPath();
-        if (isSelected) {
-          ctx.fillStyle = "#facc15";
-          ctx.strokeStyle = "#f97316";
-          ctx.lineWidth = 2;
-          ctx.arc(x, y, 6, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.stroke();
-        } else {
-          // color by planet index
-          const hue = (entry.meta.planetIndex * 60) % 360;
-          ctx.fillStyle = `hsl(${hue}, 75%, 60%)`;
-          ctx.strokeStyle = "rgba(15,23,42,0.9)";
-          ctx.lineWidth = 1;
-          ctx.arc(x, y, 4, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.stroke();
-        }
-
-        // text label
-        const name = entry.base.Name || "Base";
-        const short = name.length > 14 ? name.slice(0, 13) + "…" : name;
-        ctx.fillStyle = "#e5e7eb";
-        ctx.font = "10px system-ui, sans-serif";
-        ctx.textBaseline = "bottom";
-        ctx.fillText(short, x + 6, y - 4);
-      }
-
-      // info text
-      relBases.sort((a, b) => a.dist3d - b.dist3d);
-      const lines = [];
-      lines.push(
-        `System bases (assumed same systemKey, count=${relBases.length}):`
-      );
-      relBases.forEach((r, idx) => {
-        const flag = r.base === base ? "★" : "·";
-        lines.push(
-          `${flag} [${idx}] ${r.base.Name || "Base"}  ` +
-            `planet≈${r.meta.planetIndex}  ` +
-            `|ΔXZ|=${r.dist2d.toFixed(1)}  ` +
-            `|ΔXYZ|=${r.dist3d.toFixed(1)}  ` +
-            `rel=(${r.rel.x.toFixed(1)}, ${r.rel.y.toFixed(
-              1
-            )}, ${r.rel.z.toFixed(1)})`
-        );
-      });
-      lines.push("");
-      lines.push(
-        "Note: this uses base.Position as a proxy for world-space. Space stations / other planets are NOT stored explicitly; this is all relative to your bases."
-      );
-      galacticInfoEl.textContent = lines.join("\n");
     }
 
-    // ---------- UI wiring ----------
-    fileInput.addEventListener("change", (ev) => {
-      const file = ev.target.files[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = () => {
-        editor.value = reader.result;
-        setStatus(`Loaded file: ${file.name}`, "ok");
-        loadRootFromEditor();
+    return "0x0";
+  },
+
+  packVoxel(ua) {
+    try {
+      const toUnsigned = (val, bits) => {
+        if (val >= 0) return val;
+        return (1 << bits) + val;
       };
-      reader.onerror = () => setStatus("Failed to read file.", "error");
-      reader.readAsText(file);
+
+      const x = toUnsigned(ua.VoxelX || 0, 12) & 0xFFF;
+      const z = toUnsigned(ua.VoxelZ || 0, 12) & 0xFFF;
+      const y = toUnsigned(ua.VoxelY || 0, 8) & 0xFF;
+      const ss = (ua.SolarSystemIndex || 0) & 0xFFF;
+      const p  = (ua.PlanetIndex || 0) & 0xF;
+      const g  = 0;
+
+      let val = 0n;
+      val |= BigInt(x);
+      val |= BigInt(z)  << 12n;
+      val |= BigInt(y)  << 24n;
+      val |= BigInt(g)  << 32n;
+      val |= BigInt(ss) << 40n;
+      val |= BigInt(p)  << 52n;
+
+      return "0x" + val.toString(16).toUpperCase();
+    } catch {
+      return "0x0";
+    }
+  },
+
+  unpackVoxel(hexStr) {
+    try {
+      const clean = hexStr.replace(/^0x/i, "");
+      const val = BigInt("0x" + clean);
+
+      const xU = Number(val & 0xFFFn);
+      const zU = Number((val >> 12n) & 0xFFFn);
+      const yU = Number((val >> 24n) & 0xFFn);
+      const ss = Number((val >> 40n) & 0xFFFn);
+      const p  = Number((val >> 52n) & 0xFn);
+
+      const fromUnsigned = (u, bits) => {
+        const mid = 1 << (bits - 1);
+        return u >= mid ? u - (1 << bits) : u;
+      };
+
+      return {
+        VoxelX: fromUnsigned(xU, 12),
+        VoxelY: fromUnsigned(yU, 8),
+        VoxelZ: fromUnsigned(zU, 12),
+        SolarSystemIndex: ss,
+        PlanetIndex: p
+      };
+    } catch {
+      return { VxelX: 0, VoxelY: 0, VoxelZ: 0, SolarSystemIndex: 0, PlanetIndex: 0 };
+    }
+  }
+};
+
+/* ---------------- UI UPDATE ---------------- */
+
+function updateUI() {
+  const list = document.getElementById("baseList");
+  list.innerHTML = "";
+
+  const groups = {};
+  state.bases.forEach((base, idx) => {
+    const hex = AddressCodec.toHexFromAny(base.GalacticAddress);
+    const key = hex.length > 8 ? hex.slice(0, 8) : "0x0";
+    if (!groups[key]) groups[key] = [];
+    groups[key].push({ idx, base, hex });
+  });
+
+  const hasBases = Object.keys(groups).length > 0;
+
+  Object.keys(groups).forEach(key => {
+    const group = document.createElement("div");
+    group.className = "base-group";
+
+    const header = document.createElement("div");
+    header.className = "base-group-header";
+    header.textContent = "SYS " + key + "...";
+    group.appendChild(header);
+
+    groups[key].forEach(item => {
+      const btn = document.createElement("button");
+      btn.className = "base-item-btn" + (item.idx === state.activeBaseIndex ? " active" : "");
+      btn.textContent = item.base.Name || ("Base #" + (item.idx + 1));
+      btn.onclick = () => selectBase(item.idx);
+      group.appendChild(btn);
     });
 
-    btnPaste.addEventListener("click", async () => {
+    list.appendChild(group);
+  });
+
+  if (!hasBases && state.rootType) {
+    const msg = document.createElement("div");
+    msg.style.fontSize = "11px";
+    msg.style.color = "#f97373";
+    msg.style.marginTop = "4px";
+    msg.textContent = "No bases found in this file.";
+    list.appendChild(msg);
+  } else if (!state.rootType && !hasBases) {
+    const msg = document.createElement("div");
+    msg.style.fontSize = "11px";
+    msg.style.color = "#9ca3af";
+    msg.style.marginTop = "4px";
+    msg.textContent = "Load a base file to see bases.";
+    list.appendChild(msg);
+  }
+
+  const btnInj = document.getElementById("btnInjectContext");
+  const txtCtx = document.getElementById("ctx-status");
+  const txtDet = document.getElementById("ctx-details");
+
+  if (state.context.available) {
+    txtCtx.textContent = "READY";
+    txtCtx.style.color = "#4ade80";
+    txtDet.textContent = `${state.context.decAddress} (${state.context.hexAddress})`;
+    btnInj.disabled = (state.activeBaseIndex === -1);
+  } else {
+    txtCtx.textContent = "MISSING";
+    txtCtx.style.color = "#9ca3af";
+    txtDet.textContent = "Load BaseContext.json with UniverseAddress.";
+    btnInj.disabled = true;
+  }
+
+  const btnEx = document.getElementById("btnExport");
+  if (state.rawJson) {
+    btnEx.style.display = "inline-flex";
+  } else {
+    btnEx.style.display = "none";
+  }
+}
+
+/* ---------------- DEBUGGER ---------------- */
+
+function updateDebugger(hex) {
+  const d = AddressCodec.unpackVoxel(hex);
+  document.getElementById("dbg-hex").textContent = hex;
+  document.getElementById("dbg-sys").textContent = "SS: " + d.SolarSystemIndex;
+  document.getElementById("dbg-plt").textContent = "IDX: " + d.PlanetIndex;
+  document.getElementById("dbg-vox").textContent = `${d.VoxelX}, ${d.VoxelY}, ${d.VoxelZ}`;
+}
+
+/* ---------------- THREE SETUP ---------------- */
+
+function initThree() {
+  const container = document.getElementById("canvas-container");
+  const w = container.clientWidth;
+  const h = container.clientHeight;
+
+  state.scene = new THREE.Scene();
+
+  const grid = new THREE.GridHelper(400, 80, 0x334155, 0x1e293b);
+  grid.position.y = -0.5;
+  state.scene.add(grid);
+
+  const amb = new THREE.AmbientLight(0xffffff, 0.5);
+  state.scene.add(amb);
+  const dir = new THREE.DirectionalLight(0xffffff, 0.9);
+  dir.position.set(20, 40, 20);
+  state.scene.add(dir);
+
+  state.camera = new THREE.PerspectiveCamera(60, w / h, 0.1, 200000);
+  state.camera.position.set(40, 40, 40);
+  state.camera.lookAt(0, 0, 0);
+
+  state.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  state.renderer.setSize(w, h);
+  container.appendChild(state.renderer.domElement);
+
+  let isDragging = false;
+  let prevPos = { x: 0, y: 0 };
+  let camRadius = 60;
+  let camTheta = Math.PI / 4;
+  let camPhi = Math.PI / 4;
+  let camCenter = new THREE.Vector3(0, 0, 0);
+
+  const updateCam = () => {
+    const y = camRadius * Math.sin(camPhi);
+    const rXZ = camRadius * Math.cos(camPhi);
+    const x = rXZ * Math.sin(camTheta);
+    const z = rXZ * Math.cos(camTheta);
+    state.camera.position.set(x + camCenter.x, y + camCenter.y, z + camCenter.z);
+    state.camera.lookAt(camCenter);
+  };
+  updateCam();
+
+  const canvas = state.renderer.domElement;
+
+  canvas.addEventListener("mousedown", e => {
+    if (e.button === 2) {
+      isDragging = true;
+      prevPos = { x: e.clientX, y: e.clientY };
+    }
+  });
+
+  window.addEventListener("mouseup", () => {
+    isDragging = false;
+  });
+
+  canvas.addEventListener("contextmenu", e => e.preventDefault());
+
+  canvas.addEventListener("mousemove", e => {
+    if (isDragging) {
+      const dx = e.clientX - prevPos.x;
+      const dy = e.clientY - prevPos.y;
+      camTheta -= dx * 0.01;
+      camPhi = Math.max(0.1, Math.min(Math.PI / 2 - 0.1, camPhi + dy * 0.01));
+      prevPos = { x: e.clientX, y: e.clientY };
+      updateCam();
+    }
+  });
+
+  canvas.addEventListener("wheel", e => {
+    e.preventDefault();
+    camRadius *= 1 + e.deltaY * 0.001;
+    camRadius = Math.max(2, Math.min(200000, camRadius));
+    updateCam();
+  }, { passive: false });
+
+  canvas.addEventListener("click", e => {
+    if (isDragging) return;
+    const rect = canvas.getBoundingClientRect();
+    state.pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+    state.pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+
+    state.raycaster.setFromCamera(state.pointer, state.camera);
+    const hits = state.raycaster.intersectObjects(state.meshes.map(m => m.mesh));
+
+    if (hits.length > 0) {
+      const mesh = hits[0].object;
+      const wrap = state.meshes.find(m => m.mesh === mesh);
+      selectObject(wrap);
+    } else {
+      selectObject(null);
+    }
+  });
+
+  state.controls.frameCurrentBase = () => {
+    if (!state.meshes.length) {
+      camCenter.set(0, 0, 0);
+      camRadius = 40;
+      updateCam();
+      return;
+    }
+    const box = new THREE.Box3();
+    state.meshes.forEach(m => box.expandByPoint(m.mesh.position));
+    const size = new THREE.Vector3();
+    box.getSize(size);
+    const center = new THREE.Vector3();
+    box.getCenter(center);
+
+    camCenter.copy(center);
+    const maxDim = Math.max(size.x, size.y, size.z, 10);
+    camRadius = maxDim * 1.8;
+    camPhi = Math.PI / 4;
+    camTheta = Math.PI / 4;
+    updateCam();
+  };
+
+  window.addEventListener("resize", () => {
+    const w2 = container.clientWidth;
+    const h2 = container.clientHeight;
+    state.camera.aspect = w2 / h2;
+    state.camera.updateProjectionMatrix();
+    state.renderer.setSize(w2, h2);
+  });
+
+  const animate = () => {
+    requestAnimationFrame(animate);
+    state.renderer.render(state.scene, state.camera);
+  };
+  animate();
+}
+
+/* ---------------- FILE LOADING ---------------- */
+
+function loadFile(file) {
+  const reader = new FileReader();
+  reader.onload = e => {
+    const text = e.target.result;
+    let json;
+    try {
+      json = JSON.parse(text);
+    } catch (err) {
+      console.error(err);
+      alert("Failed to parse JSON. Check console.");
+      return;
+    }
+
+    const isWrapper =
+      json &&
+      json.PlayerStateData &&
+      Array.isArray(json.PlayerStateData.PersistentPlayerBases);
+    const hasUniverseAddress =
+      json &&
+      json.PlayerStateData &&
+      json.PlayerStateData.UniverseAddress &&
+      json.PlayerStateData.UniverseAddress.GalacticAddress != null;
+    const isBaseList = Array.isArray(json);
+    const isSingleBase = json && json.Objects && json.GalacticAddress != null;
+
+    // Context-only BaseContext
+    if (!isWrapper && hasUniverseAddress && !isBaseList && !isSingleBase) {
+      const ua = json.PlayerStateData.UniverseAddress;
+      const rawGA = ua.GalacticAddress;
+      state.context.decAddress = String(rawGA);
+      state.context.hexAddress = AddressCodec.toHexFromAny(rawGA);
+      state.context.sourceName = file.name;
+      state.context.available = true;
+      updateUI();
+      alert("Context loaded. Now load PersistentPlayerBases.json or a wrapper save to edit bases.");
+      return;
+    }
+
+    // Wrapper with bases + context
+    if (isWrapper) {
+      state.rawJson = json;
+      state.filename = file.name;
+      state.rootType = "wrapper";
+      state.bases = json.PlayerStateData.PersistentPlayerBases || [];
+
+      if (hasUniverseAddress) {
+        const ua = json.PlayerStateData.UniverseAddress;
+        const rawGA = ua.GalacticAddress;
+        state.context.decAddress = String(rawGA);
+        state.context.hexAddress = AddressCodec.toHexFromAny(rawGA);
+        state.context.sourceName = file.name + " (wrapper)";
+        state.context.available = true;
+      }
+
+      updateUI();
+      if (state.bases.length > 0) selectBase(0);
+      return;
+    }
+
+    // Raw PersistentPlayerBases array
+    if (isBaseList) {
+      state.rawJson = json;
+      state.filename = file.name;
+      state.rootType = "baseList";
+      state.bases = json;
+      updateUI();
+      if (state.bases.length > 0) selectBase(0);
+      return;
+    }
+
+    // Single base
+    if (isSingleBase) {
+      state.rawJson = json;
+      state.filename = file.name;
+      state.rootType = "singleBase";
+      state.bases = [json];
+      updateUI();
+      selectBase(0);
+      return;
+    }
+
+    alert("Unknown file shape. No bases or UniverseAddress detected.");
+  };
+  reader.readAsText(file);
+}
+
+/* ---------------- BASE & OBJECT SELECTION ---------------- */
+
+function selectBase(idx) {
+  state.activeBaseIndex = idx;
+  updateUI();
+
+  const base = state.bases[idx];
+  if (!base) return;
+
+  const hex = AddressCodec.toHexFromAny(base.GalacticAddress);
+  updateDebugger(hex);
+
+  state.meshes.forEach(wrap => state.scene.remove(wrap.mesh));
+  state.meshes = [];
+
+  if (base.Objects && Array.isArray(base.Objects)) {
+    base.Objects.forEach(obj => {
+      let x = 0, y = 0, z = 0;
+      let format = "unknown";
+
+      if (Array.isArray(obj.Position)) {
+        x = obj.Position[0];
+        y = obj.Position[1];
+        z = obj.Position[2];
+        format = "array";
+      } else if (obj.Position && typeof obj.Position === "object") {
+        x = obj.Position.x;
+        y = obj.Position.y;
+        z = obj.Position.z;
+        format = "object";
+      }
+
+      const mesh = new THREE.Mesh(state.helpers.geomBox, state.helpers.matNormal);
+      mesh.position.set(x, y, z);
+      state.scene.add(mesh);
+
+      state.meshes.push({ mesh, data: obj, posFormat: format });
+    });
+  }
+
+  state.controls.frameCurrentBase();
+  selectObject(null);
+}
+
+function selectObject(wrapper) {
+  if (state.selectedMesh) {
+    state.selectedMesh.mesh.material = state.helpers.matNormal;
+  }
+
+  state.selectedMesh = wrapper;
+
+  const info = document.getElementById("selection-info");
+  const none = document.getElementById("no-selection");
+
+  if (wrapper) {
+    wrapper.mesh.material = state.helpers.matSelected;
+    info.style.display = "";
+    none.style.display = "none";
+
+    document.getElementById("inpObjId").value =
+      wrapper.data.ObjectID || wrapper.data.ID || "Unknown";
+    document.getElementById("inpX").value = wrapper.mesh.position.x;
+    document.getElementById("inpY").value = wrapper.mesh.position.y;
+    document.getElementById("inpZ").value = wrapper.mesh.position.z;
+    document.getElementById("storage-format").textContent = wrapper.posFormat.toUpperCase();
+  } else {
+    info.style.display = "none";
+    none.style.display = "";
+  }
+}
+
+/* ---------------- EDITING: SINGLE OBJECT ---------------- */
+
+function applyChanges() {
+  if (!state.selectedMesh) return;
+
+  const x = parseFloat(document.getElementById("inpX").value);
+  const y = parseFloat(document.getElementById("inpY").value);
+  const z = parseFloat(document.getElementById("inpZ").value);
+  if (isNaN(x) || isNaN(y) || isNaN(z)) return;
+
+  const wrap = state.selectedMesh;
+  wrap.mesh.position.set(x, y, z);
+
+  if (wrap.posFormat === "array") {
+    wrap.data.Position[0] = x;
+    wrap.data.Position[1] = y;
+    wrap.data.Position[2] = z;
+  } else if (wrap.posFormat === "object") {
+    wrap.data.Position.x = x;
+    wrap.data.Position.y = y;
+    wrap.data.Position.z = z;
+  }
+}
+
+/* ---------------- EDITING: GLOBAL OFFSET ---------------- */
+
+function applyGlobalOffset() {
+  if (state.activeBaseIndex === -1) return;
+  const base = state.bases[state.activeBaseIndex];
+  if (!base || !Array.isArray(base.Objects)) return;
+
+  const dx = parseFloat(document.getElementById("offX").value) || 0;
+  const dy = parseFloat(document.getElementById("offY").value) || 0;
+  const dz = parseFloat(document.getElementById("offZ").value) || 0;
+
+  if (dx === 0 && dy === 0 && dz === 0) return;
+
+  const msg =
+    "This will offset EVERY part in this base by:\n" +
+    `ΔX: ${dx}, ΔY: ${dy}, ΔZ: ${dz}\n\n` +
+    "This only affects local base coordinates — not planet position.\n\nContinue?";
+  if (!confirm(msg)) return;
+
+  base.Objects.forEach(obj => {
+    if (Array.isArray(obj.Position)) {
+      obj.Position[0] += dx;
+      obj.Position[1] += dy;
+      obj.Position[2] += dz;
+    } else if (obj.Position && typeof obj.Position === "object") {
+      obj.Position.x += dx;
+      obj.Position.y += dy;
+      obj.Position.z += dz;
+    }
+  });
+
+  state.meshes.forEach(wrap => {
+    wrap.mesh.position.x += dx;
+    wrap.mesh.position.y += dy;
+    wrap.mesh.position.z += dz;
+  });
+
+  state.controls.frameCurrentBase();
+  alert("Global offset applied to base.");
+}
+
+/* ---------------- CONTEXT INJECTION ---------------- */
+
+function injectContext() {
+  if (!state.context.available || state.activeBaseIndex === -1) return;
+  const base = state.bases[state.activeBaseIndex];
+  if (!base) return;
+
+  const oldAddr = String(base.GalacticAddress || "None");
+  const newAddr = state.context.decAddress;
+
+  const msg =
+    `Base "${base.Name || ("#" + (state.activeBaseIndex + 1))}"\n\n` +
+    `OLD GalacticAddress: ${oldAddr}\n` +
+    `NEW GalacticAddress: ${newAddr}\n\n` +
+    "This effectively moves the base to the context system.\n\nProceed?";
+  if (!confirm(msg)) return;
+
+  base.GalacticAddress = newAddr;
+
+  updateUI();
+  selectBase(state.activeBaseIndex);
+  alert("Context injected into base GalacticAddress.");
+}
+
+/* ---------------- EXPORT ---------------- */
+
+function exportJson() {
+  if (!state.rawJson) return;
+  const str = JSON.stringify(state.rawJson, null, 2);
+  const blob = new Blob([str], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "edited_" + state.filename;
+  a.click();
+}
+
+/* ---------------- BOOTSTRAP ---------------- */
+
+window.addEventListener("DOMContentLoaded", () => {
+  initThree();
+  updateUI();
+
+  document.getElementById("fileInput").addEventListener("change", e => {
+    if (e.target.files[0]) loadFile(e.target.files[0]);
+  });
+
+  document.getElementById("btnApply").addEventListener("click", applyChanges);
+
+  document.querySelectorAll(".btn-nudge").forEach(btn => {
+    btn.addEventListener("click", () => {
+      if (!state.selectedMesh) return;
+      const axis = btn.dataset.axis;
+      const val = parseFloat(btn.dataset.val);
+      const id = axis === "x" ? "inpX" : axis === "y" ? "inpY" : "inpZ";
+      const input = document.getElementById(id);
+      input.value = parseFloat(input.value || "0") + val;
+      applyChanges();
+    });
+  });
+
+  document.getElementById("btnInjectContext").addEventListener("click", injectContext);
+  document.getElementById("btnExport").addEventListener("click", exportJson);
+  document.getElementById("btnFrameAll").addEventListener("click", () => {
+    state.controls.frameCurrentBase();
+  });
+  document.getElementById("btnOffsetBase").addEventListener("click", applyGlobalOffset);
+});
+</script>
+</body>
+  </html><!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>NMS Galactic Lab [Architect Edition – Minimal]</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- Three.js (non-module, CDN) -->
+  <script src="https://unpkg.com/three@0.148.0/build/three.min.js"></script>
+
+  <style>
+    /* Basic Reset */
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+      background-color: #1f1f23;
+      background-image:
+        radial-gradient(circle at 0 0, rgba(255,255,255,0.04) 0, transparent 55%),
+        radial-gradient(circle at 100% 100%, rgba(255,255,255,0.04) 0, transparent 55%);
+      color: #f5f5f5;
+      display: flex;
+    }
+
+    /* Glassmorphism Panel Base */
+    .glass {
+      background: rgba(255, 255, 255, 0.06);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 10px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+    }
+
+    /* Scrollbar styling */
+    .scroll-thin::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    .scroll-thin::-webkit-scrollbar-thumb {
+      background: rgba(200, 200, 200, 0.4);
+      border-radius: 999px;
+    }
+    .scroll-thin::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    /* App Layout */
+    #app-container {
+      display: flex;
+      width: 100%;
+      height: 100%;
+      padding: 10px;
+      gap: 10px;
+    }
+
+    .sidebar {
+      width: 260px;
+      height: 100%;
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      overflow: hidden;
+    }
+
+    #center-panel {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    /* Left Panel */
+    #header-block {
+      padding: 8px 10px;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+
+    #header-title {
+      font-weight: 600;
+      font-size: 14px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #a5b4fc;
+    }
+
+    #header-sub {
+      margin-top: 2px;
+      font-size: 11px;
+      color: #9ca3af;
+    }
+
+    #file-controls {
+      display: flex;
+      gap: 6px;
+      padding: 8px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+
+    .btn, .btn-label {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 6px 10px;
+      border-radius: 6px;
+      font-size: 11px;
+      border: 1px solid rgba(255,255,255,0.16);
+      background: rgba(15,15,20,0.85);
+      color: #e5e7eb;
+      cursor: pointer;
+      transition: background 0.15s ease, border-color 0.15s ease, transform 0.05s ease;
+      white-space: nowrap;
+    }
+
+    .btn:hover,
+    .btn-label:hover {
+      background: rgba(35,35,45,0.95);
+      border-color: rgba(255,255,255,0.35);
+    }
+
+    .btn:active,
+    .btn-label:active {
+      transform: scale(0.97);
+    }
+
+    .btn-primary {
+      background: #22c55e;
+      border-color: #16a34a;
+      color: #022c22;
+      font-weight: 600;
+    }
+
+    .btn-primary:hover {
+      background: #4ade80;
+      border-color: #16a34a;
+    }
+
+    #fileInput {
+      display: none;
+    }
+
+    #context-block {
+      padding: 8px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      font-size: 11px;
+    }
+
+    #ctx-label-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 4px;
+    }
+
+    #ctx-label-row span:first-child {
+      color: #9ca3af;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      font-size: 10px;
+    }
+
+    #ctx-status {
+      font-weight: 600;
+      font-size: 10px;
+    }
+
+    #ctx-details {
+      font-family: SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size: 10px;
+      color: #9ca3af;
+      word-break: break-all;
+      margin-bottom: 6px;
+    }
+
+    #btnInjectContext {
+      width: 100%;
+      font-size: 11px;
+    }
+
+    #btnInjectContext:disabled {
+      opacity: 0.35;
+      cursor: not-allowed;
+    }
+
+    #base-list-label {
+      margin-top: 4px;
+      margin-bottom: 4px;
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      color: #9ca3af;
+    }
+
+    #baseList {
+      flex: 1;
+      overflow-y: auto;
+      padding-right: 2px;
+      font-size: 11px;
+    }
+
+    .base-group {
+      border-radius: 7px;
+      border: 1px solid rgba(148,163,184,0.24);
+      margin-bottom: 6px;
+      overflow: hidden;
+      background: rgba(15,23,42,0.45);
+    }
+
+    .base-group-header {
+      padding: 4px 7px;
+      font-size: 10px;
+      font-family: SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      color: #6b7280;
+      background: rgba(15,23,42,0.8);
+      border-bottom: 1px solid rgba(148,163,184,0.24);
+    }
+
+    .base-item-btn {
+      width: 100%;
+      text-align: left;
+      padding: 5px 8px;
+      border: none;
+      background: transparent;
+      color: #d1d5db;
+      cursor: pointer;
+      font-size: 11px;
+      border-left: 2px solid transparent;
+      transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+      overflow: hidden;
+    }
+
+    .base-item-btn:hover {
+      background: rgba(30,64,175,0.25);
+    }
+
+    .base-item-btn.active {
+      background: rgba(37,99,235,0.25);
+      color: #e5e7eb;
+      border-color: #60a5fa;
+    }
+
+    /* Center Panel */
+    #toolbar {
+      height: 38px;
+      padding: 6px 10px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    #toolbar-title {
+      font-size: 11px;
+      color: #9ca3af;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    #toolbar-controls {
+      display: flex;
+      gap: 6px;
+    }
+
+    #canvas-area {
+      flex: 1;
+      position: relative;
+      border-radius: 10px;
+      overflow: hidden;
+      background-color: #202329;
+      background-image: radial-gradient(circle, rgba(255,255,255,0.05) 1px, transparent 1px);
+      background-size: 26px 26px;
+    }
+
+    #canvas-container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+    }
+
+    /* Right Panel */
+    #selection-block {
+      padding-bottom: 8px;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      font-size: 11px;
+    }
+
+    #selection-title {
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      color: #9ca3af;
+      margin-bottom: 4px;
+    }
+
+    #selection-info,
+    #no-selection {
+      margin-top: 4px;
+    }
+
+    #no-selection {
+      color: #6b7280;
+      font-size: 11px;
+    }
+
+    .field-group {
+      margin-bottom: 6px;
+    }
+
+    .field-label {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #9ca3af;
+      margin-bottom: 2px;
+    }
+
+    .mono-input {
+      width: 100%;
+      padding: 4px 6px;
+      border-radius: 6px;
+      border: 1px solid rgba(148,163,184,0.45);
+      background: rgba(15,23,42,0.9);
+      color: #e5e7eb;
+      font-size: 11px;
+      font-family: SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    }
+
+    .mono-input[readonly] {
+      opacity: 0.7;
+    }
+
+    #xyz-grid {
+      display: grid;
+      grid-template-columns: 20px 1fr 40px 40px;
+      gap: 4px;
+      align-items: center;
+      margin-top: 4px;
+    }
+
+    .axis-label {
+      font-weight: 700;
+      font-size: 11px;
+      text-align: center;
+    }
+
+    .axis-label.x { color: #f97373; }
+    .axis-label.y { color: #4ade80; }
+    .axis-label.z { color: #60a5fa; }
+
+    .btn-small {
+      font-size: 10px;
+      padding: 3px 4px;
+    }
+
+    #storage-box {
+      margin-top: 6px;
+      padding: 4px 6px;
+      border-radius: 6px;
+      background: rgba(15,23,42,0.9);
+      border: 1px solid rgba(148,163,184,0.4);
+      font-size: 10px;
+    }
+
+    #storage-label {
+      color: #9ca3af;
+      margin-bottom: 2px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-size: 9px;
+    }
+
+    #storage-format {
+      font-family: SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      color: #e5e7eb;
+      font-size: 11px;
+    }
+
+    /* Global Offset Block */
+    #offset-block {
+      padding-top: 8px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      font-size: 11px;
+    }
+
+    #offset-title {
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      color: #fca5a5;
+      margin-bottom: 4px;
+    }
+
+    #offset-desc {
+      font-size: 10px;
+      color: #9ca3af;
+      margin-bottom: 6px;
+    }
+
+    #offset-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 4px;
+      margin-bottom: 6px;
+    }
+
+    #btnOffsetBase {
+      width: 100%;
+      font-size: 11px;
+      background: #ef4444;
+      border-color: #b91c1c;
+      color: #f9fafb;
+      font-weight: 600;
+    }
+
+    #btnOffsetBase:hover {
+      background: #f97373;
+    }
+
+    /* Debugger Block */
+    #debug-block {
+      padding-top: 8px;
+      font-size: 10px;
+    }
+
+    #debug-title {
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      color: #9ca3af;
+      margin-bottom: 4px;
+    }
+
+    .debug-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 2px;
+    }
+
+    .debug-label {
+      color: #9ca3af;
+    }
+
+    .debug-value {
+      font-family: SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      color: #e5e7eb;
+    }
+
+    /* Small screen fallback: stack panels */
+    @media (max-width: 960px) {
+      #app-container {
+        flex-direction: column;
+      }
+      .sidebar {
+        width: 100%;
+        height: auto;
+        min-height: 150px;
+      }
+      #center-panel {
+        height: 50vh;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="app-container">
+    <!-- LEFT PANEL -->
+    <div class="sidebar glass" id="left-panel">
+      <div id="header-block">
+        <div id="header-title">NMS GALACTIC LAB</div>
+        <div id="header-sub">Architect Edition · Single-File Tool</div>
+      </div>
+
+      <div id="file-controls">
+        <label class="btn-label" for="fileInput">📂 Load JSON</label>
+        <input type="file" id="fileInput" accept=".json,.txt" />
+        <button id="btnExport" class="btn btn-primary" style="display:none;">💾 Save JSON</button>
+      </div>
+
+      <div id="context-block">
+        <div id="ctx-label-row">
+          <span>CONTEXT (PLAYER)</span>
+          <span id="ctx-status">MISSING</span>
+        </div>
+        <div id="ctx-details">Load BaseContext.json to capture UniverseAddress.</div>
+        <button id="btnInjectContext" class="btn" disabled>⤵ Inject Context to Base</button>
+      </div>
+
+      <div id="base-list-label">BASES</div>
+      <div id="baseList" class="scroll-thin">
+        <div style="font-size:11px;color:#9ca3af;margin-top:4px;">
+          Load a save file containing PersistentPlayerBases to begin.
+        </div>
+      </div>
+    </div>
+
+    <!-- CENTER PANEL -->
+    <div id="center-panel">
+      <div id="toolbar" class="glass">
+        <div id="toolbar-title">3D COORDINATE LAB</div>
+        <div id="toolbar-controls">
+          <button id="btnFrameAll" class="btn btn-small">Center Base</button>
+        </div>
+      </div>
+      <div id="canvas-area" class="glass">
+        <div id="canvas-container"></div>
+      </div>
+    </div>
+
+    <!-- RIGHT PANEL -->
+    <div class="sidebar glass" id="right-panel">
+      <div id="selection-block">
+        <div id="selection-title">OBJECT EDITOR</div>
+
+        <div id="selection-info" style="display:none;">
+          <div class="field-group">
+            <div class="field-label">Object ID</div>
+            <input id="inpObjId" class="mono-input" type="text" readonly />
+          </div>
+
+          <div class="field-group">
+            <div class="field-label">Local Position (Base Space)</div>
+            <div id="xyz-grid">
+              <div class="axis-label x">X</div>
+              <input id="inpX" class="mono-input" type="number" step="any" />
+              <button class="btn btn-small btn-nudge" data-axis="x" data-val="1">+1</button>
+              <button class="btn btn-small btn-nudge" data-axis="x" data-val="-1">-1</button>
+
+              <div class="axis-label y">Y</div>
+              <input id="inpY" class="mono-input" type="number" step="any" />
+              <button class="btn btn-small btn-nudge" data-axis="y" data-val="1">+1</button>
+              <button class="btn btn-small btn-nudge" data-axis="y" data-val="-1">-1</button>
+
+              <div class="axis-label z">Z</div>
+              <input id="inpZ" class="mono-input" type="number" step="any" />
+              <button class="btn btn-small btn-nudge" data-axis="z" data-val="1">+1</button>
+              <button class="btn btn-small btn-nudge" data-axis="z" data-val="-1">-1</button>
+            </div>
+          </div>
+
+          <button id="btnApply" class="btn btn-small" style="width:100%;margin-top:4px;">Apply XYZ to Part</button>
+
+          <div id="storage-box">
+            <div id="storage-label">STORAGE FORMAT</div>
+            <div id="storage-format">Unknown</div>
+          </div>
+        </div>
+
+        <div id="no-selection">
+          No part selected.<br/>
+          <span style="font-size:10px;">Click a cube in the 3D view to edit.</span>
+        </div>
+      </div>
+
+      <div id="offset-block">
+        <div id="offset-title">GLOBAL BASE OFFSET</div>
+        <div id="offset-desc">
+          Offsets <b>all parts</b> of the active base in local space.<br/>
+          Does <b>not</b> move planets or stations.
+        </div>
+        <div id="offset-grid">
+          <input id="offX" class="mono-input" type="number" step="any" placeholder="ΔX" />
+          <input id="offY" class="mono-input" type="number" step="any" placeholder="ΔY" />
+          <input id="offZ" class="mono-input" type="number" step="any" placeholder="ΔZ" />
+        </div>
+        <button id="btnOffsetBase" class="btn">Apply Offset to Entire Base</button>
+      </div>
+
+      <div id="debug-block">
+        <div id="debug-title">ADDRESS DECODER (EXPERIMENTAL)</div>
+        <div class="debug-row">
+          <span class="debug-label">HEX</span>
+          <span id="dbg-hex" class="debug-value">-</span>
+        </div>
+        <div class="debug-row">
+          <span class="debug-label">SYS</span>
+          <span id="dbg-sys" class="debug-value">-</span>
+        </div>
+        <div class="debug-row">
+          <span class="debug-label">PLT</span>
+          <span id="dbg-plt" class="debug-value">-</span>
+        </div>
+        <div class="debug-row">
+          <span class="debug-label">VOX</span>
+          <span id="dbg-vox" class="debug-value">-</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+/* ================================================================
+   NMS GALACTIC LAB – MINIMAL EDITION
+   - Multi-file aware: BaseContext + PersistentPlayerBases
+   - Decimal-safe GalacticAddress handling
+   - 3D object editor + global base offset
+   - Explicitly experimental galactic unpacking
+   ================================================================ */
+
+const state = {
+  rawJson: null,
+  filename: "nms_save.json",
+  rootType: null, // 'wrapper', 'baseList', 'singleBase'
+
+  bases: [],
+  activeBaseIndex: -1,
+
+  context: {
+    available: false,
+    hexAddress: null,
+    decAddress: null,
+    sourceName: null
+  },
+
+  scene: null,
+  camera: null,
+  renderer: null,
+  raycaster: new THREE.Raycaster(),
+  pointer: new THREE.Vector2(),
+  meshes: [],
+  selectedMesh: null,
+
+  helpers: {
+    matNormal: new THREE.MeshLambertMaterial({ color: 0xaaaaaa }),
+    matSelected: new THREE.MeshLambertMaterial({ color: 0xff00ff, emissive: 0x330033 }),
+    geomBox: new THREE.BoxGeometry(1, 1, 1)
+  },
+
+  controls: {
+    frameCurrentBase: () => {}
+  }
+};
+
+/* ---------------- ADDRESS CODEC ---------------- */
+
+const AddressCodec = {
+  toHexFromAny(addr) {
+    if (addr == null) return "0x0";
+
+    if (typeof addr === "object") {
+      if ("VoxelX" in addr || "VoxelY" in addr || "VoxelZ" in addr) {
+        return AddressCodec.packVoxel(addr);
+      }
+      return "0x0";
+    }
+
+    if (typeof addr === "number") {
       try {
-        if (!navigator.clipboard) {
-          setStatus("Clipboard API not available.", "error");
-          return;
-        }
-        const text = await navigator.clipboard.readText();
-        if (!text) {
-          setStatus("Clipboard is empty.", "error");
-          return;
-        }
-        editor.value = text;
-        setStatus("Pasted JSON from clipboard.", "ok");
-        loadRootFromEditor();
-      } catch (e) {
-        console.error(e);
-        setStatus("Clipboard read failed (permissions).", "error");
-      }
-    });
-
-    btnFormat.addEventListener("click", () => {
-      const raw = editor.value.trim();
-      if (!raw) {
-        setStatus("Editor is empty.", "error");
-        return;
-      }
-      try {
-        const parsed = parseNmsJson(raw);
-        editor.value = JSON.stringify(parsed, null, 2);
-        setStatus("JSON valid & pretty-printed (NMS hex sanitized).", "ok");
-        currentRoot = parsed;
-        currentMode = detectJsonMode(parsed);
-        setMode(currentMode);
-      } catch (e) {
-        setStatus("JSON error: " + e.message, "error");
-      }
-    });
-
-    btnApply.addEventListener("click", () => {
-      loadRootFromEditor();
-    });
-
-    btnCopy.addEventListener("click", async () => {
-      const text = editor.value.trim();
-      if (!text) {
-        setStatus("Nothing to copy.", "error");
-        return;
-      }
-      try {
-        await copyToClipboard(text);
-        setStatus("JSON copied to clipboard.", "ok");
-      } catch (e) {
-        console.error(e);
-        setStatus("Copy failed (clipboard blocked).", "error");
-      }
-    });
-
-    btnDownload.addEventListener("click", () => {
-      const text = editor.value.trim();
-      if (!text) {
-        setStatus("Nothing to download.", "error");
-        return;
-      }
-      let filename = "nms.json";
-      try {
-        const parsed = parseNmsJson(text);
-        if (parsed && typeof parsed === "object" && typeof parsed.Name === "string") {
-          filename =
-            parsed.Name.replace(/[^a-z0-9_\-]+/gi, "_").slice(0, 50) + ".json";
-        } else if (Array.isArray(parsed)) {
-          filename = "PersistentPlayerBases.json";
-        }
+        return "0x" + BigInt(addr).toString(16).toUpperCase();
       } catch {
-        filename = "nms-raw.json";
+        return "0x0";
       }
-      // Export with \xHH style for NMS (best-effort)
-      const parsed = parseNmsJson(text);
-      let out = JSON.stringify(parsed, null, 2);
-      out = unsanitizeNms(out);
-      downloadBlob(out, filename);
-      setStatus(`JSON downloaded as "${filename}".`, "ok");
+    }
+
+    if (typeof addr === "string") {
+      const trimmed = addr.trim();
+      if (!trimmed) return "0x0";
+
+      if (trimmed.startsWith("0x") || /[a-fA-F]/.test(trimmed)) {
+        return trimmed.startsWith("0x")
+          ? trimmed.toUpperCase()
+          : "0x" + trimmed.toUpperCase();
+      }
+
+      try {
+        const val = BigInt(trimmed);
+        return "0x" + val.toString(16).toUpperCase();
+      } catch {
+        return "0x0";
+      }
+    }
+
+    return "0x0";
+  },
+
+  packVoxel(ua) {
+    try {
+      const toUnsigned = (val, bits) => {
+        if (val >= 0) return val;
+        return (1 << bits) + val;
+      };
+
+      const x = toUnsigned(ua.VoxelX || 0, 12) & 0xFFF;
+      const z = toUnsigned(ua.VoxelZ || 0, 12) & 0xFFF;
+      const y = toUnsigned(ua.VoxelY || 0, 8) & 0xFF;
+      const ss = (ua.SolarSystemIndex || 0) & 0xFFF;
+      const p  = (ua.PlanetIndex || 0) & 0xF;
+      const g  = 0;
+
+      let val = 0n;
+      val |= BigInt(x);
+      val |= BigInt(z)  << 12n;
+      val |= BigInt(y)  << 24n;
+      val |= BigInt(g)  << 32n;
+      val |= BigInt(ss) << 40n;
+      val |= BigInt(p)  << 52n;
+
+      return "0x" + val.toString(16).toUpperCase();
+    } catch {
+      return "0x0";
+    }
+  },
+
+  unpackVoxel(hexStr) {
+    try {
+      const clean = hexStr.replace(/^0x/i, "");
+      const val = BigInt("0x" + clean);
+
+      const xU = Number(val & 0xFFFn);
+      const zU = Number((val >> 12n) & 0xFFFn);
+      const yU = Number((val >> 24n) & 0xFFn);
+      const ss = Number((val >> 40n) & 0xFFFn);
+      const p  = Number((val >> 52n) & 0xFn);
+
+      const fromUnsigned = (u, bits) => {
+        const mid = 1 << (bits - 1);
+        return u >= mid ? u - (1 << bits) : u;
+      };
+
+      return {
+        VoxelX: fromUnsigned(xU, 12),
+        VoxelY: fromUnsigned(yU, 8),
+        VoxelZ: fromUnsigned(zU, 12),
+        SolarSystemIndex: ss,
+        PlanetIndex: p
+      };
+    } catch {
+      return { VxelX: 0, VoxelY: 0, VoxelZ: 0, SolarSystemIndex: 0, PlanetIndex: 0 };
+    }
+  }
+};
+
+/* ---------------- UI UPDATE ---------------- */
+
+function updateUI() {
+  const list = document.getElementById("baseList");
+  list.innerHTML = "";
+
+  const groups = {};
+  state.bases.forEach((base, idx) => {
+    const hex = AddressCodec.toHexFromAny(base.GalacticAddress);
+    const key = hex.length > 8 ? hex.slice(0, 8) : "0x0";
+    if (!groups[key]) groups[key] = [];
+    groups[key].push({ idx, base, hex });
+  });
+
+  const hasBases = Object.keys(groups).length > 0;
+
+  Object.keys(groups).forEach(key => {
+    const group = document.createElement("div");
+    group.className = "base-group";
+
+    const header = document.createElement("div");
+    header.className = "base-group-header";
+    header.textContent = "SYS " + key + "...";
+    group.appendChild(header);
+
+    groups[key].forEach(item => {
+      const btn = document.createElement("button");
+      btn.className = "base-item-btn" + (item.idx === state.activeBaseIndex ? " active" : "");
+      btn.textContent = item.base.Name || ("Base #" + (item.idx + 1));
+      btn.onclick = () => selectBase(item.idx);
+      group.appendChild(btn);
     });
 
-    btnFrameAll.addEventListener("click", frameAll);
-    btnResetCam.addEventListener("click", resetCamera);
+    list.appendChild(group);
+  });
 
-    baseSelect.addEventListener("change", onBaseSelectionChanged);
+  if (!hasBases && state.rootType) {
+    const msg = document.createElement("div");
+    msg.style.fontSize = "11px";
+    msg.style.color = "#f97373";
+    msg.style.marginTop = "4px";
+    msg.textContent = "No bases found in this file.";
+    list.appendChild(msg);
+  } else if (!state.rootType && !hasBases) {
+    const msg = document.createElement("div");
+    msg.style.fontSize = "11px";
+    msg.style.color = "#9ca3af";
+    msg.style.marginTop = "4px";
+    msg.textContent = "Load a base file to see bases.";
+    list.appendChild(msg);
+  }
 
-    // Move buttons
-    btnXminus.addEventListener("click", () => nudgeSelected("x", -getStep()));
-    btnXplus.addEventListener("click", () => nudgeSelected("x", +getStep()));
-    btnYminus.addEventListener("click", () => nudgeSelected("y", -getStep()));
-    btnYplus.addEventListener("click", () => nudgeSelected("y", +getStep()));
-    btnZminus.addEventListener("click", () => nudgeSelected("z", -getStep()));
-    btnZplus.addEventListener("click", () => nudgeSelected("z", +getStep()));
-    btnApplyPos.addEventListener("click", applyPosFromInputs);
-    btnSyncJson.addEventListener("click", syncJsonFromState);
+  const btnInj = document.getElementById("btnInjectContext");
+  const txtCtx = document.getElementById("ctx-status");
+  const txtDet = document.getElementById("ctx-details");
 
-    // Boot
-    initThree();
-    clearGalacticCanvas();
-    setStatus(
-      "Idle. Load/paste a base JSON or PersistentPlayerBases.json, then use “Update 3D from JSON”.",
-      "info"
-    );
-    setMode("unknown");
-  </script>
+  if (state.context.available) {
+    txtCtx.textContent = "READY";
+    txtCtx.style.color = "#4ade80";
+    txtDet.textContent = `${state.context.decAddress} (${state.context.hexAddress})`;
+    btnInj.disabled = (state.activeBaseIndex === -1);
+  } else {
+    txtCtx.textContent = "MISSING";
+    txtCtx.style.color = "#9ca3af";
+    txtDet.textContent = "Load BaseContext.json with UniverseAddress.";
+    btnInj.disabled = true;
+  }
+
+  const btnEx = document.getElementById("btnExport");
+  if (state.rawJson) {
+    btnEx.style.display = "inline-flex";
+  } else {
+    btnEx.style.display = "none";
+  }
+}
+
+/* ---------------- DEBUGGER ---------------- */
+
+function updateDebugger(hex) {
+  const d = AddressCodec.unpackVoxel(hex);
+  document.getElementById("dbg-hex").textContent = hex;
+  document.getElementById("dbg-sys").textContent = "SS: " + d.SolarSystemIndex;
+  document.getElementById("dbg-plt").textContent = "IDX: " + d.PlanetIndex;
+  document.getElementById("dbg-vox").textContent = `${d.VoxelX}, ${d.VoxelY}, ${d.VoxelZ}`;
+}
+
+/* ---------------- THREE SETUP ---------------- */
+
+function initThree() {
+  const container = document.getElementById("canvas-container");
+  const w = container.clientWidth;
+  const h = container.clientHeight;
+
+  state.scene = new THREE.Scene();
+
+  const grid = new THREE.GridHelper(400, 80, 0x334155, 0x1e293b);
+  grid.position.y = -0.5;
+  state.scene.add(grid);
+
+  const amb = new THREE.AmbientLight(0xffffff, 0.5);
+  state.scene.add(amb);
+  const dir = new THREE.DirectionalLight(0xffffff, 0.9);
+  dir.position.set(20, 40, 20);
+  state.scene.add(dir);
+
+  state.camera = new THREE.PerspectiveCamera(60, w / h, 0.1, 200000);
+  state.camera.position.set(40, 40, 40);
+  state.camera.lookAt(0, 0, 0);
+
+  state.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  state.renderer.setSize(w, h);
+  container.appendChild(state.renderer.domElement);
+
+  let isDragging = false;
+  let prevPos = { x: 0, y: 0 };
+  let camRadius = 60;
+  let camTheta = Math.PI / 4;
+  let camPhi = Math.PI / 4;
+  let camCenter = new THREE.Vector3(0, 0, 0);
+
+  const updateCam = () => {
+    const y = camRadius * Math.sin(camPhi);
+    const rXZ = camRadius * Math.cos(camPhi);
+    const x = rXZ * Math.sin(camTheta);
+    const z = rXZ * Math.cos(camTheta);
+    state.camera.position.set(x + camCenter.x, y + camCenter.y, z + camCenter.z);
+    state.camera.lookAt(camCenter);
+  };
+  updateCam();
+
+  const canvas = state.renderer.domElement;
+
+  canvas.addEventListener("mousedown", e => {
+    if (e.button === 2) {
+      isDragging = true;
+      prevPos = { x: e.clientX, y: e.clientY };
+    }
+  });
+
+  window.addEventListener("mouseup", () => {
+    isDragging = false;
+  });
+
+  canvas.addEventListener("contextmenu", e => e.preventDefault());
+
+  canvas.addEventListener("mousemove", e => {
+    if (isDragging) {
+      const dx = e.clientX - prevPos.x;
+      const dy = e.clientY - prevPos.y;
+      camTheta -= dx * 0.01;
+      camPhi = Math.max(0.1, Math.min(Math.PI / 2 - 0.1, camPhi + dy * 0.01));
+      prevPos = { x: e.clientX, y: e.clientY };
+      updateCam();
+    }
+  });
+
+  canvas.addEventListener("wheel", e => {
+    e.preventDefault();
+    camRadius *= 1 + e.deltaY * 0.001;
+    camRadius = Math.max(2, Math.min(200000, camRadius));
+    updateCam();
+  }, { passive: false });
+
+  canvas.addEventListener("click", e => {
+    if (isDragging) return;
+    const rect = canvas.getBoundingClientRect();
+    state.pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+    state.pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+
+    state.raycaster.setFromCamera(state.pointer, state.camera);
+    const hits = state.raycaster.intersectObjects(state.meshes.map(m => m.mesh));
+
+    if (hits.length > 0) {
+      const mesh = hits[0].object;
+      const wrap = state.meshes.find(m => m.mesh === mesh);
+      selectObject(wrap);
+    } else {
+      selectObject(null);
+    }
+  });
+
+  state.controls.frameCurrentBase = () => {
+    if (!state.meshes.length) {
+      camCenter.set(0, 0, 0);
+      camRadius = 40;
+      updateCam();
+      return;
+    }
+    const box = new THREE.Box3();
+    state.meshes.forEach(m => box.expandByPoint(m.mesh.position));
+    const size = new THREE.Vector3();
+    box.getSize(size);
+    const center = new THREE.Vector3();
+    box.getCenter(center);
+
+    camCenter.copy(center);
+    const maxDim = Math.max(size.x, size.y, size.z, 10);
+    camRadius = maxDim * 1.8;
+    camPhi = Math.PI / 4;
+    camTheta = Math.PI / 4;
+    updateCam();
+  };
+
+  window.addEventListener("resize", () => {
+    const w2 = container.clientWidth;
+    const h2 = container.clientHeight;
+    state.camera.aspect = w2 / h2;
+    state.camera.updateProjectionMatrix();
+    state.renderer.setSize(w2, h2);
+  });
+
+  const animate = () => {
+    requestAnimationFrame(animate);
+    state.renderer.render(state.scene, state.camera);
+  };
+  animate();
+}
+
+/* ---------------- FILE LOADING ---------------- */
+
+function loadFile(file) {
+  const reader = new FileReader();
+  reader.onload = e => {
+    const text = e.target.result;
+    let json;
+    try {
+      json = JSON.parse(text);
+    } catch (err) {
+      console.error(err);
+      alert("Failed to parse JSON. Check console.");
+      return;
+    }
+
+    const isWrapper =
+      json &&
+      json.PlayerStateData &&
+      Array.isArray(json.PlayerStateData.PersistentPlayerBases);
+    const hasUniverseAddress =
+      json &&
+      json.PlayerStateData &&
+      json.PlayerStateData.UniverseAddress &&
+      json.PlayerStateData.UniverseAddress.GalacticAddress != null;
+    const isBaseList = Array.isArray(json);
+    const isSingleBase = json && json.Objects && json.GalacticAddress != null;
+
+    // Context-only BaseContext
+    if (!isWrapper && hasUniverseAddress && !isBaseList && !isSingleBase) {
+      const ua = json.PlayerStateData.UniverseAddress;
+      const rawGA = ua.GalacticAddress;
+      state.context.decAddress = String(rawGA);
+      state.context.hexAddress = AddressCodec.toHexFromAny(rawGA);
+      state.context.sourceName = file.name;
+      state.context.available = true;
+      updateUI();
+      alert("Context loaded. Now load PersistentPlayerBases.json or a wrapper save to edit bases.");
+      return;
+    }
+
+    // Wrapper with bases + context
+    if (isWrapper) {
+      state.rawJson = json;
+      state.filename = file.name;
+      state.rootType = "wrapper";
+      state.bases = json.PlayerStateData.PersistentPlayerBases || [];
+
+      if (hasUniverseAddress) {
+        const ua = json.PlayerStateData.UniverseAddress;
+        const rawGA = ua.GalacticAddress;
+        state.context.decAddress = String(rawGA);
+        state.context.hexAddress = AddressCodec.toHexFromAny(rawGA);
+        state.context.sourceName = file.name + " (wrapper)";
+        state.context.available = true;
+      }
+
+      updateUI();
+      if (state.bases.length > 0) selectBase(0);
+      return;
+    }
+
+    // Raw PersistentPlayerBases array
+    if (isBaseList) {
+      state.rawJson = json;
+      state.filename = file.name;
+      state.rootType = "baseList";
+      state.bases = json;
+      updateUI();
+      if (state.bases.length > 0) selectBase(0);
+      return;
+    }
+
+    // Single base
+    if (isSingleBase) {
+      state.rawJson = json;
+      state.filename = file.name;
+      state.rootType = "singleBase";
+      state.bases = [json];
+      updateUI();
+      selectBase(0);
+      return;
+    }
+
+    alert("Unknown file shape. No bases or UniverseAddress detected.");
+  };
+  reader.readAsText(file);
+}
+
+/* ---------------- BASE & OBJECT SELECTION ---------------- */
+
+function selectBase(idx) {
+  state.activeBaseIndex = idx;
+  updateUI();
+
+  const base = state.bases[idx];
+  if (!base) return;
+
+  const hex = AddressCodec.toHexFromAny(base.GalacticAddress);
+  updateDebugger(hex);
+
+  state.meshes.forEach(wrap => state.scene.remove(wrap.mesh));
+  state.meshes = [];
+
+  if (base.Objects && Array.isArray(base.Objects)) {
+    base.Objects.forEach(obj => {
+      let x = 0, y = 0, z = 0;
+      let format = "unknown";
+
+      if (Array.isArray(obj.Position)) {
+        x = obj.Position[0];
+        y = obj.Position[1];
+        z = obj.Position[2];
+        format = "array";
+      } else if (obj.Position && typeof obj.Position === "object") {
+        x = obj.Position.x;
+        y = obj.Position.y;
+        z = obj.Position.z;
+        format = "object";
+      }
+
+      const mesh = new THREE.Mesh(state.helpers.geomBox, state.helpers.matNormal);
+      mesh.position.set(x, y, z);
+      state.scene.add(mesh);
+
+      state.meshes.push({ mesh, data: obj, posFormat: format });
+    });
+  }
+
+  state.controls.frameCurrentBase();
+  selectObject(null);
+}
+
+function selectObject(wrapper) {
+  if (state.selectedMesh) {
+    state.selectedMesh.mesh.material = state.helpers.matNormal;
+  }
+
+  state.selectedMesh = wrapper;
+
+  const info = document.getElementById("selection-info");
+  const none = document.getElementById("no-selection");
+
+  if (wrapper) {
+    wrapper.mesh.material = state.helpers.matSelected;
+    info.style.display = "";
+    none.style.display = "none";
+
+    document.getElementById("inpObjId").value =
+      wrapper.data.ObjectID || wrapper.data.ID || "Unknown";
+    document.getElementById("inpX").value = wrapper.mesh.position.x;
+    document.getElementById("inpY").value = wrapper.mesh.position.y;
+    document.getElementById("inpZ").value = wrapper.mesh.position.z;
+    document.getElementById("storage-format").textContent = wrapper.posFormat.toUpperCase();
+  } else {
+    info.style.display = "none";
+    none.style.display = "";
+  }
+}
+
+/* ---------------- EDITING: SINGLE OBJECT ---------------- */
+
+function applyChanges() {
+  if (!state.selectedMesh) return;
+
+  const x = parseFloat(document.getElementById("inpX").value);
+  const y = parseFloat(document.getElementById("inpY").value);
+  const z = parseFloat(document.getElementById("inpZ").value);
+  if (isNaN(x) || isNaN(y) || isNaN(z)) return;
+
+  const wrap = state.selectedMesh;
+  wrap.mesh.position.set(x, y, z);
+
+  if (wrap.posFormat === "array") {
+    wrap.data.Position[0] = x;
+    wrap.data.Position[1] = y;
+    wrap.data.Position[2] = z;
+  } else if (wrap.posFormat === "object") {
+    wrap.data.Position.x = x;
+    wrap.data.Position.y = y;
+    wrap.data.Position.z = z;
+  }
+}
+
+/* ---------------- EDITING: GLOBAL OFFSET ---------------- */
+
+function applyGlobalOffset() {
+  if (state.activeBaseIndex === -1) return;
+  const base = state.bases[state.activeBaseIndex];
+  if (!base || !Array.isArray(base.Objects)) return;
+
+  const dx = parseFloat(document.getElementById("offX").value) || 0;
+  const dy = parseFloat(document.getElementById("offY").value) || 0;
+  const dz = parseFloat(document.getElementById("offZ").value) || 0;
+
+  if (dx === 0 && dy === 0 && dz === 0) return;
+
+  const msg =
+    "This will offset EVERY part in this base by:\n" +
+    `ΔX: ${dx}, ΔY: ${dy}, ΔZ: ${dz}\n\n` +
+    "This only affects local base coordinates — not planet position.\n\nContinue?";
+  if (!confirm(msg)) return;
+
+  base.Objects.forEach(obj => {
+    if (Array.isArray(obj.Position)) {
+      obj.Position[0] += dx;
+      obj.Position[1] += dy;
+      obj.Position[2] += dz;
+    } else if (obj.Position && typeof obj.Position === "object") {
+      obj.Position.x += dx;
+      obj.Position.y += dy;
+      obj.Position.z += dz;
+    }
+  });
+
+  state.meshes.forEach(wrap => {
+    wrap.mesh.position.x += dx;
+    wrap.mesh.position.y += dy;
+    wrap.mesh.position.z += dz;
+  });
+
+  state.controls.frameCurrentBase();
+  alert("Global offset applied to base.");
+}
+
+/* ---------------- CONTEXT INJECTION ---------------- */
+
+function injectContext() {
+  if (!state.context.available || state.activeBaseIndex === -1) return;
+  const base = state.bases[state.activeBaseIndex];
+  if (!base) return;
+
+  const oldAddr = String(base.GalacticAddress || "None");
+  const newAddr = state.context.decAddress;
+
+  const msg =
+    `Base "${base.Name || ("#" + (state.activeBaseIndex + 1))}"\n\n` +
+    `OLD GalacticAddress: ${oldAddr}\n` +
+    `NEW GalacticAddress: ${newAddr}\n\n` +
+    "This effectively moves the base to the context system.\n\nProceed?";
+  if (!confirm(msg)) return;
+
+  base.GalacticAddress = newAddr;
+
+  updateUI();
+  selectBase(state.activeBaseIndex);
+  alert("Context injected into base GalacticAddress.");
+}
+
+/* ---------------- EXPORT ---------------- */
+
+function exportJson() {
+  if (!state.rawJson) return;
+  const str = JSON.stringify(state.rawJson, null, 2);
+  const blob = new Blob([str], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "edited_" + state.filename;
+  a.click();
+}
+
+/* ---------------- BOOTSTRAP ---------------- */
+
+window.addEventListener("DOMContentLoaded", () => {
+  initThree();
+  updateUI();
+
+  document.getElementById("fileInput").addEventListener("change", e => {
+    if (e.target.files[0]) loadFile(e.target.files[0]);
+  });
+
+  document.getElementById("btnApply").addEventListener("click", applyChanges);
+
+  document.querySelectorAll(".btn-nudge").forEach(btn => {
+    btn.addEventListener("click", () => {
+      if (!state.selectedMesh) return;
+      const axis = btn.dataset.axis;
+      const val = parseFloat(btn.dataset.val);
+      const id = axis === "x" ? "inpX" : axis === "y" ? "inpY" : "inpZ";
+      const input = document.getElementById(id);
+      input.value = parseFloat(input.value || "0") + val;
+      applyChanges();
+    });
+  });
+
+  document.getElementById("btnInjectContext").addEventListener("click", injectContext);
+  document.getElementById("btnExport").addEventListener("click", exportJson);
+  document.getElementById("btnFrameAll").addEventListener("click", () => {
+    state.controls.frameCurrentBase();
+  });
+  document.getElementById("btnOffsetBase").addEventListener("click", applyGlobalOffset);
+});
+</script>
 </body>
   </html>
